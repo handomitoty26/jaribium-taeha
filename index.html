@@ -1,0 +1,1345 @@
+<!-- 태하관 야간 자습 자리 비움 기록 키오스크 — 사감 책상 위 태블릿에서 학번과 사유로 자리 비움·복귀를 기록하고 현황·통계를 보여 준다 -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>태하관 자리 비움 기록</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="태하관자리비움기록v1">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="logic.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root {
+  --ink-950: #080c19;
+  --ink-900: #0b1020;
+  --ink-850: #0f1528;
+  --ink-800: #131b31;
+  --ink-700: #1a243f;
+  --ink-600: #243051;
+  --line: rgba(150, 168, 214, 0.13);
+  --line-strong: rgba(150, 168, 214, 0.24);
+  --text: #e9edf7;
+  --text-dim: #a3aecb;
+  --text-faint: #6b7796;
+  --amber: #f4b54a;
+  --amber-soft: rgba(244, 181, 74, 0.14);
+  --amber-ink: #2a1c04;
+  --teal: #40d1b1;
+  --teal-soft: rgba(64, 209, 177, 0.14);
+  --coral: #ff7b6c;
+  --coral-soft: rgba(255, 123, 108, 0.15);
+  --sky: #93b4ff;
+  --sky-soft: rgba(147, 180, 255, 0.13);
+  --radius-l: 20px;
+  --radius-m: 14px;
+  --radius-s: 10px;
+  --font: "Pretendard Variable", Pretendard, "SUIT Variable", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  position: fixed; inset: 0; margin: 0; overflow: hidden;
+  background: radial-gradient(1200px 700px at 15% -10%, #16203d 0%, transparent 60%), var(--ink-900);
+  color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.45;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+input, select { font: inherit; color: var(--text); user-select: text; -webkit-user-select: text; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* ── 전체 틀 ── */
+.app { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto; padding: max(14px, env(safe-area-inset-top)) 18px 0; gap: 14px; }
+
+/* 위 막대 */
+.topbar { display: flex; align-items: center; gap: 14px; min-height: 52px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(145deg, #222e52, #141c34); border: 1px solid var(--line-strong); flex: none; }
+.brand-mark svg { width: 22px; height: 22px; }
+.brand-name { font-weight: 800; font-size: 18px; letter-spacing: -0.3px; white-space: nowrap; }
+.brand-sub { font-size: 12.5px; color: var(--text-faint); letter-spacing: 0.2px; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--ink-800); font-size: 13.5px; font-weight: 700; color: var(--text-dim); white-space: nowrap; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
+.chip.is-study { color: var(--text); }
+.chip.is-study .dot { background: var(--amber); box-shadow: 0 0 0 4px var(--amber-soft); }
+.chip.is-ok .dot { background: var(--teal); }
+.chip.is-warn { color: var(--coral); border-color: rgba(255, 123, 108, 0.35); }
+.chip.is-warn .dot { background: var(--coral); }
+.spacer { flex: 1; }
+.clock { font-size: 30px; font-weight: 800; letter-spacing: 0.5px; }
+.clock small { font-size: 13px; color: var(--text-faint); font-weight: 600; margin-left: 8px; letter-spacing: 0; }
+
+/* 본문: 현황판 + 입력 */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); gap: 18px; min-height: 0; }
+.panel { background: linear-gradient(180deg, rgba(26, 36, 63, 0.72), rgba(19, 27, 49, 0.72)); border: 1px solid var(--line); border-radius: var(--radius-l); min-height: 0; }
+
+/* 현황판 */
+.board { display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+.board-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid var(--line); }
+.eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 1.6px; color: var(--text-faint); text-transform: uppercase; }
+.board-title { font-size: 20px; font-weight: 800; margin-top: 2px; }
+.board-count { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+.board-count span { font-size: 18px; font-weight: 700; color: var(--text-dim); margin-left: 4px; letter-spacing: 0; }
+.board-list { overflow-y: auto; padding: 8px 12px; overscroll-behavior: contain; }
+.out-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 14px; width: 100%; padding: 14px 12px; border-radius: var(--radius-m); text-align: left; }
+.out-row + .out-row { border-top: 1px solid var(--line); border-radius: 0; }
+.out-row:active { background: var(--ink-700); }
+.out-hak { font-size: 15px; font-weight: 700; color: var(--text-dim); }
+.out-name { font-size: 21px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.out-meta { font-size: 13px; color: var(--text-faint); margin-top: 2px; }
+.out-time { text-align: right; min-width: 108px; }
+.out-min { font-size: 30px; font-weight: 800; line-height: 1; }
+.out-min small { font-size: 14px; color: var(--text-dim); font-weight: 700; margin-left: 2px; }
+.bar { height: 6px; border-radius: 3px; background: var(--ink-600); margin-top: 9px; overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; background: var(--amber); transition: width 0.6s ease; }
+.out-row.is-long .out-min { color: var(--coral); }
+.out-row.is-long .bar > i { background: var(--coral); }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; margin-left: 6px; vertical-align: 2px; }
+.tag-coral { background: var(--coral-soft); color: var(--coral); }
+.tag-amber { background: var(--amber-soft); color: var(--amber); }
+.tag-teal { background: var(--teal-soft); color: var(--teal); }
+.tag-sky { background: var(--sky-soft); color: var(--sky); }
+.tag-mute { background: var(--ink-600); color: var(--text-dim); }
+.board-empty { display: grid; place-items: center; text-align: center; height: 100%; color: var(--text-faint); padding: 30px; }
+.board-empty svg { width: 64px; height: 64px; opacity: 0.55; margin-bottom: 12px; }
+.board-empty b { display: block; color: var(--text-dim); font-size: 17px; margin-bottom: 4px; }
+.board-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 20px 18px; border-top: 1px solid var(--line); }
+.stat { flex: 1 1 0; min-width: 84px; padding: 10px 12px; border-radius: var(--radius-s); background: var(--ink-850); border: 1px solid var(--line); }
+.stat-label { font-size: 12px; color: var(--text-faint); font-weight: 700; }
+.stat-value { font-size: 22px; font-weight: 800; }
+.old-open { margin: 6px 4px 10px; padding: 12px 14px; border-radius: var(--radius-m); background: var(--coral-soft); color: var(--coral); font-weight: 700; font-size: 14px; width: calc(100% - 8px); text-align: left; }
+
+/* 입력 */
+.entry { display: grid; grid-template-rows: auto auto 1fr; gap: 14px; padding: 18px; }
+.slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.slot { height: 76px; border-radius: var(--radius-m); background: var(--ink-950); border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 44px; font-weight: 800; color: var(--text); }
+.slot.is-next { border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
+.result { position: relative; min-height: 132px; border-radius: var(--radius-m); padding: 16px 18px; background: var(--ink-850); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; gap: 6px; overflow: hidden; }
+.result::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--ink-600); }
+.result[data-tone="out"]::before { background: var(--amber); }
+.result[data-tone="return"]::before { background: var(--teal); }
+.result[data-tone="info"]::before { background: var(--sky); }
+.result[data-tone="error"]::before { background: var(--coral); }
+.result-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.result-name { font-size: 38px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+.result-hak { font-size: 15px; color: var(--text-faint); font-weight: 700; }
+.badge { font-size: 16px; font-weight: 800; padding: 5px 12px; border-radius: 999px; }
+.badge-out { background: var(--amber); color: var(--amber-ink); }
+.badge-return { background: var(--teal); color: #032a22; }
+.badge-info { background: var(--sky-soft); color: var(--sky); }
+.badge-error { background: var(--coral-soft); color: var(--coral); }
+.result-sub { font-size: 16px; color: var(--text-dim); font-weight: 600; }
+.result-idle { color: var(--text-faint); font-size: 15px; line-height: 1.6; }
+.result-idle b { color: var(--text-dim); }
+.undo { align-self: flex-start; margin-top: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--text-dim); font-size: 14px; font-weight: 700; }
+.undo:active { background: var(--ink-700); }
+.result.enter { animation: rise 0.22s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 10px; min-height: 0; }
+.key { border-radius: var(--radius-m); background: linear-gradient(180deg, #1f2a49, #19223d); border: 1px solid var(--line); font-size: 36px; font-weight: 700; display: grid; place-items: center; transition: transform 0.08s ease, background 0.08s ease; min-height: 56px; }
+.key.is-down { transform: scale(0.96); background: var(--ink-600); }
+.key-aux { font-size: 17px; font-weight: 700; color: var(--text-dim); background: transparent; border-color: var(--line-strong); gap: 6px; display: flex; align-items: center; justify-content: center; }
+.key-aux svg { width: 22px; height: 22px; }
+.key-go { background: var(--amber); color: var(--amber-ink); font-size: 20px; font-weight: 800; border: 0; }
+.key-go.is-down { background: #dc9f36; }
+
+/* 아래 탭 막대 */
+.tabs { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 8px 0 max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); margin: 0 -18px; padding-left: 18px; padding-right: 18px; background: rgba(8, 12, 25, 0.6); }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border-radius: var(--radius-s); color: var(--text-dim); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.tab svg { width: 22px; height: 22px; }
+.tab:active { background: var(--ink-700); color: var(--text); }
+
+/* 시트(교사용 화면) */
+.sheet { position: fixed; inset: 0; z-index: 50; display: none; background: rgba(4, 7, 16, 0.62); backdrop-filter: blur(4px); padding: 4vh 3vw; }
+.sheet.is-open { display: grid; place-items: center; }
+.sheet-panel { width: min(920px, 100%); height: min(88vh, 100%); display: grid; grid-template-rows: auto 1fr; background: var(--ink-850); border: 1px solid var(--line-strong); border-radius: 22px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); animation: rise 0.2s ease-out; }
+.sheet-panel.is-small { height: auto; max-height: 88vh; width: min(560px, 100%); }
+.sheet-head { display: flex; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.sheet-title { font-size: 21px; font-weight: 800; }
+.sheet-sub { font-size: 13px; color: var(--text-faint); }
+.sheet-close { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--text-dim); border: 1px solid var(--line); }
+.sheet-body { overflow-y: auto; padding: 18px 22px 26px; overscroll-behavior: contain; }
+.section { margin-bottom: 22px; }
+.section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 800; letter-spacing: 1.2px; color: var(--text-faint); margin-bottom: 10px; }
+.card { background: var(--ink-800); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 16px; }
+.rows { border: 1px solid var(--line); border-radius: var(--radius-m); overflow: hidden; }
+.row { display: grid; grid-template-columns: 58px minmax(0, 1.2fr) 70px 70px 64px minmax(84px, auto); gap: 10px; align-items: center; width: 100%; padding: 12px 14px; text-align: left; font-size: 15px; }
+.row + .row { border-top: 1px solid var(--line); }
+.row:active { background: var(--ink-700); }
+.row-head { font-size: 12px; font-weight: 800; color: var(--text-faint); background: var(--ink-800); letter-spacing: 0.5px; }
+.row .dim { color: var(--text-dim); }
+.row .strong { font-weight: 800; }
+.empty-note { color: var(--text-faint); padding: 18px; text-align: center; font-size: 15px; }
+.group-label { display: flex; align-items: center; gap: 10px; margin: 18px 0 8px; font-weight: 800; }
+.group-label .count { color: var(--text-faint); font-weight: 700; font-size: 14px; }
+
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile { background: var(--ink-800); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 14px 16px; }
+.tile-label { font-size: 12.5px; color: var(--text-faint); font-weight: 700; }
+.tile-value { font-size: 34px; font-weight: 800; line-height: 1.15; }
+.tile-value small { font-size: 15px; color: var(--text-dim); margin-left: 3px; }
+.tile-foot { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+.field { display: grid; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 13px; font-weight: 800; color: var(--text-dim); }
+.input, select.input { width: 100%; padding: 12px 14px; border-radius: var(--radius-s); background: var(--ink-950); border: 1px solid var(--line-strong); font-size: 16px; }
+.input::placeholder { color: var(--text-faint); }
+.hint { font-size: 13px; color: var(--text-faint); line-height: 1.6; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; border-radius: var(--radius-s); font-weight: 800; font-size: 15px; background: var(--ink-700); border: 1px solid var(--line-strong); color: var(--text); }
+.btn:active { background: var(--ink-600); }
+.btn-amber { background: var(--amber); color: var(--amber-ink); border: 0; }
+.btn-teal { background: var(--teal); color: #032a22; border: 0; }
+.btn-coral { background: transparent; color: var(--coral); border-color: rgba(255, 123, 108, 0.4); }
+.btn-wide { width: 100%; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-row > .btn { flex: 1 1 160px; }
+.btn-big { padding: 22px 18px; font-size: 19px; border-radius: var(--radius-m); }
+.periods { display: grid; grid-template-columns: 70px 1fr 1fr; gap: 8px 10px; align-items: center; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
+.toggle input { width: 22px; height: 22px; accent-color: var(--amber); }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-dow { font-size: 12px; text-align: center; color: var(--text-faint); font-weight: 800; padding-bottom: 4px; }
+.cal-day { aspect-ratio: 1.25; border-radius: var(--radius-s); background: var(--ink-800); color: var(--text-faint); display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+.cal-day.has { background: var(--ink-700); color: var(--text); border: 1px solid var(--line-strong); }
+.cal-day.has small { font-size: 11.5px; color: var(--amber); font-weight: 800; }
+.cal-day.is-today { outline: 2px solid var(--sky); }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-weight: 800; font-size: 18px; }
+.trail { font-size: 13px; color: var(--text-faint); line-height: 1.7; }
+.banner { padding: 14px 16px; border-radius: var(--radius-m); background: var(--sky-soft); color: var(--sky); font-weight: 700; margin-bottom: 16px; }
+.banner.is-warn { background: var(--coral-soft); color: var(--coral); }
+.rank { font-size: 15px; font-weight: 800; color: var(--text-faint); }
+.reasons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.reason { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 138px; padding: 16px; border-radius: var(--radius-m); background: var(--ink-800); border: 1px solid var(--line-strong); transition: transform 0.08s ease, background 0.08s ease; }
+.reason:active { background: var(--ink-700); transform: scale(0.98); }
+.reason-icon { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; background: var(--amber-soft); color: var(--amber); }
+.reason-icon svg { width: 28px; height: 28px; }
+.reason-label { font-size: 21px; font-weight: 800; }
+.reason-hint { font-size: 12.5px; font-weight: 800; color: var(--coral); margin-top: -4px; }
+.limits { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.limit { display: grid; gap: 6px; font-size: 13px; font-weight: 800; color: var(--text-dim); }
+
+.toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 90; padding: 12px 20px; border-radius: 999px; background: #e9edf7; color: #0b1020; font-weight: 800; font-size: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); display: none; max-width: 90vw; text-align: center; }
+.toast.is-on { display: block; animation: rise 0.18s ease-out; }
+
+/* 세로 화면·좁은 화면 — 현황판은 위에 짧게, 남는 높이는 키패드 */
+@media (orientation: portrait), (max-width: 900px) {
+  .main { grid-template-columns: 1fr; grid-template-rows: minmax(150px, 30%) minmax(0, 1fr); gap: 12px; }
+  .board-foot { display: none; }
+  .board-head { padding: 12px 18px 10px; }
+  .board-count { font-size: 34px; }
+  .out-row { padding: 10px 10px; }
+  .board-empty svg { width: 44px; height: 44px; margin-bottom: 6px; }
+  .entry { gap: 10px; padding: 14px; overflow: hidden; }
+  .slot { height: 62px; font-size: 38px; }
+  .result { min-height: 104px; padding: 12px 16px; }
+  .result-name { font-size: 30px; }
+  .key { font-size: 30px; min-height: 44px; }
+  .brand-sub { display: none; }
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+}
+@media (max-width: 640px) {
+  .app { padding-left: 12px; padding-right: 12px; gap: 10px; }
+  .tabs { margin: 0 -12px; padding-left: 8px; padding-right: 8px; gap: 0; }
+  .tab { font-size: 11px; padding: 6px 0; }
+  .tab svg { width: 20px; height: 20px; }
+  .brand-name { display: none; }
+  .chip { padding: 6px 10px; font-size: 12.5px; }
+  .clock { font-size: 22px; }
+  .row { grid-template-columns: 52px 1fr 56px auto; }
+  .row-rec > :nth-child(4), .row-rec > :nth-child(5) { display: none; }
+  .tiles { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-door" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4.5A1.5 1.5 0 0 1 6.5 3H14"/><path d="M14 3l4 1.6V21H5"/><path d="M12 12.5v.01"/><path d="M19 9h2.5M20.5 7.5 22 9l-1.5 1.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20h16"/><path d="M7 16V9M12 16V5M17 16v-4"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-roster" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10a4 4 0 0 1-.5 8z"/><path d="M12 11v5M9.8 13.2 12 11l2.2 2.2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 6H9l-6 6 6 6h12z"/><path d="m16 10-4 4M12 10l4 4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></symbol>
+  <symbol id="i-seat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7v6H7z"/><path d="M5 9h14a7 7 0 0 1-14 0z"/><path d="M9 16l-1 5h8l-1-5"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-1.4 16.1a1 1 0 0 1-1 .9H9.4a1 1 0 0 1-1-.9z"/><path d="M7.6 9.5h8.8"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="i-calm" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M44 12a20 20 0 1 0 8 30A16 16 0 0 1 44 12z"/><path d="M50 14v6M47 17h6"/></symbol>
+</svg>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" style="color:var(--amber)"><svg><use href="#i-door"/></svg></div>
+      <div>
+        <div class="brand-name">자리 비움 기록</div>
+        <div class="brand-sub" id="brandSub">태하관 야간 자습</div>
+      </div>
+    </div>
+    <span class="chip" id="gradeChip"><span class="dot"></span><span>학년 미설정</span></span>
+    <span class="chip" id="periodChip"><span class="dot"></span><span>—</span></span>
+    <div class="spacer"></div>
+    <span class="chip" id="backupChip" role="button" tabindex="0"><span class="dot"></span><span>백업</span></span>
+    <div class="clock num" id="clock">--:--</div>
+  </header>
+
+  <main class="main">
+    <section class="panel board" aria-label="지금 자리 비움">
+      <div class="board-head">
+        <div>
+          <div class="eyebrow">실시간 현황</div>
+          <div class="board-title">지금 자리 비움</div>
+        </div>
+        <div class="board-count num" id="outCount">0<span>명</span></div>
+      </div>
+      <div class="board-list" id="boardList"></div>
+      <div class="board-foot" id="boardFoot"></div>
+    </section>
+
+    <section class="panel entry" aria-label="학번 입력">
+      <div class="slots num" id="slots" aria-live="polite">
+        <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+      </div>
+      <div class="result" id="result" data-tone="idle" aria-live="assertive"></div>
+      <div class="keypad" id="keypad">
+        <button class="key num" data-k="1">1</button><button class="key num" data-k="2">2</button><button class="key num" data-k="3">3</button>
+        <button class="key num" data-k="4">4</button><button class="key num" data-k="5">5</button><button class="key num" data-k="6">6</button>
+        <button class="key num" data-k="7">7</button><button class="key num" data-k="8">8</button><button class="key num" data-k="9">9</button>
+        <button class="key key-aux" data-k="back" aria-label="지우기"><svg><use href="#i-back"/></svg>지움</button>
+        <button class="key num" data-k="0">0</button>
+        <button class="key key-go" data-k="enter">확인</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="메뉴">
+    <button class="tab" data-open="today"><svg><use href="#i-list"/></svg>오늘 기록</button>
+    <button class="tab" data-open="student"><svg><use href="#i-user"/></svg>학생별</button>
+    <button class="tab" data-open="top"><svg><use href="#i-bars"/></svg>최근 7일</button>
+    <button class="tab" data-open="calendar"><svg><use href="#i-cal"/></svg>지난 날짜</button>
+    <button class="tab" data-open="roster"><svg><use href="#i-roster"/></svg>명단</button>
+    <button class="tab" data-open="backup"><svg><use href="#i-cloud"/></svg>백업</button>
+    <button class="tab" data-open="settings"><svg><use href="#i-gear"/></svg>설정</button>
+    <button class="tab" id="fsTab"><svg><use href="#i-expand"/></svg>전체화면</button>
+  </nav>
+</div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-panel" id="sheetPanel">
+    <div class="sheet-head">
+      <div style="flex:1;min-width:0">
+        <div class="sheet-title" id="sheetTitle"></div>
+        <div class="sheet-sub" id="sheetSub"></div>
+      </div>
+      <button class="sheet-close" id="sheetClose" aria-label="닫기"><svg width="20" height="20"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+<input type="file" id="rosterFile" accept=".xlsx,.xls" hidden>
+<input type="file" id="restoreFile" accept=".json,application/json" hidden>
+
+<script>
+"use strict";
+const L = window.RestroomLogic;
+// 화면과 계산 파일의 판이 다르면(업데이트 중 섞임) 멈춘 화면 대신 안내를 띄운다
+if (!L || L.LOGIC_VERSION !== 2) {
+  document.body.innerHTML = '<div style="position:fixed;inset:0;display:grid;place-items:center;background:#0b1020;color:#e9edf7;font:700 20px/1.6 sans-serif;text-align:center;padding:24px"><div>프로그램 파일을 다시 받아야 합니다.<br><span style="font-weight:500;font-size:16px;color:#a3aecb">인터넷에 연결한 뒤 앱을 닫았다가 다시 열어 주세요. 기록은 그대로 있습니다.</span></div></div>';
+  throw new Error("logic.js 판이 맞지 않습니다");
+}
+const TITLE = "태하관자리비움";
+const K = { settings: "restroom_settings", roster: "restroom_roster", excluded: "restroom_excluded", device: "restroom_device", drive: "restroom_drive" };
+const $ = (id) => document.getElementById(id);
+const esc = L.escapeHtml;
+let toastTimer = null;
+
+// ── 브라우저 저장소(이 앱 키만, restroom_ 접두어) ──
+function lsGet(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; } }
+function lsSet(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { toast("기기 저장 공간에 쓰지 못했습니다"); return false; } }
+
+let SETTINGS = Object.assign({ grade: null, periods: L.DEFAULT_PERIODS, limits: { ...L.DEFAULT_LIMITS }, voice: false }, lsGet(K.settings, {}));
+if (L.validateLimits(SETTINGS.limits)) SETTINGS.limits = { ...L.DEFAULT_LIMITS };
+let ROSTER = lsGet(K.roster, null); // { students, count, sheet, fileName, loadedAt, grade }
+let EXCLUDED = lsGet(K.excluded, []);
+let DEVICE = lsGet(K.device, null);
+if (!DEVICE) { DEVICE = Math.random().toString(36).slice(2, 10); if (!lsSet(K.device, DEVICE)) setTimeout(() => toast("기기 저장 공간에 쓰지 못해 드라이브 백업 폴더가 바뀔 수 있습니다"), 1500); }
+let RECORDS = [];
+let OPEN = {};
+let input = "";
+
+const students = () => (ROSTER && ROSTER.students) || {};
+const gradeLabel = () => (SETTINGS.grade === "all" ? "전체" : SETTINGS.grade ? `${SETTINGS.grade}학년` : "학년미설정");
+const nowYear = () => L.schoolYear(Date.now());
+function nameOf(hak, recYear) {
+  return L.nameFor(hak, students(), recYear == null ? nowYear() : recYear, nowYear());
+}
+// 저장에 성공했을 때만 화면 상태를 바꾼다 — 실패하면 기존 설정 유지(감사실장 P2)
+function saveSettings(next) { if (!lsSet(K.settings, next)) return false; SETTINGS = next; return true; }
+
+// ── IndexedDB(기록은 여기, 학번당 열린 기록 하나를 open 저장소로 지킨다 — 검토 15·16) ──
+let dbPromise = null;
+function db() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const q = indexedDB.open("restroomLog", 1);
+      q.onupgradeneeded = () => {
+        const d = q.result;
+        const s = d.createObjectStore("records", { keyPath: "id" });
+        s.createIndex("day", "day");
+        s.createIndex("hak", "hak");
+        d.createObjectStore("open", { keyPath: "hak" });
+      };
+      q.onsuccess = () => resolve(q.result);
+      q.onerror = () => reject(q.error);
+    });
+  }
+  return dbPromise;
+}
+const reqP = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+async function runTx(stores, mode, fn) {
+  const d = await db();
+  return new Promise((resolve, reject) => {
+    const t = d.transaction(stores, mode);
+    let result;
+    let failed = null;
+    t.oncomplete = () => (failed ? reject(failed) : resolve(result)); // 완료된 뒤에만 성공(검토 15)
+    t.onerror = () => reject(failed || t.error);
+    t.onabort = () => reject(failed || t.error || new Error("저장이 취소됐습니다"));
+    Promise.resolve().then(() => fn(t)).then((v) => { result = v; }, (e) => { failed = e; try { t.abort(); } catch (_) {} });
+  });
+}
+async function loadAll() {
+  RECORDS = await runTx(["records"], "readonly", (t) => reqP(t.objectStore("records").getAll()));
+  OPEN = {};
+  for (const r of RECORDS) if (r.status === "open") OPEN[r.hak] = r;
+}
+async function writeOut(hak, now, period, reason) {
+  return runTx(["records", "open"], "readwrite", async (t) => {
+    if (await reqP(t.objectStore("open").get(hak))) throw new Error("conflict");
+    const rec = L.makeOutRecord({ hak, now, period, reason });
+    t.objectStore("records").add(rec);
+    t.objectStore("open").add({ hak, id: rec.id });
+    return rec;
+  });
+}
+async function writeReturn(hak, id, now) {
+  return runTx(["records", "open"], "readwrite", async (t) => {
+    const o = await reqP(t.objectStore("open").get(hak));
+    if (!o || o.id !== id) throw new Error("conflict");
+    const next = L.applyReturn(await reqP(t.objectStore("records").get(id)), now);
+    t.objectStore("records").put(next);
+    t.objectStore("open").delete(hak);
+    return next;
+  });
+}
+// 학생이 "그때 돌아왔고 지금 나가요"를 고른 경우 — 이전 기록 정리와 새 자리 비움을 한 번에(결정 12)
+async function writeResolveThenOut(hak, id, now, newPeriod, reason) {
+  return runTx(["records", "open"], "readwrite", async (t) => {
+    const o = await reqP(t.objectStore("open").get(hak));
+    if (!o || o.id !== id) throw new Error("conflict");
+    const old = L.resolveMissing(await reqP(t.objectStore("records").get(id)), "학생 선택: 복귀 입력 누락", now);
+    t.objectStore("records").put(old);
+    t.objectStore("open").delete(hak);
+    let fresh = null;
+    if (newPeriod && reason) {
+      fresh = L.makeOutRecord({ hak, now, period: newPeriod, reason });
+      t.objectStore("records").add(fresh);
+      t.objectStore("open").add({ hak, id: fresh.id });
+    }
+    return { old, fresh };
+  });
+}
+// 사감 수정·취소 — 차례대로. 바꾸기 시작한 기록(base)의 변경 번호가 DB와 같을 때만 저장한다
+// (다른 화면이 먼저 바꿨으면 덮지 않고 거부, 감사실장 P1). 학번당 열린 기록 하나도 지킨다.
+const change = (base, next) => ({ base, next });
+async function saveRecords(changes) {
+  return runTx(["records", "open"], "readwrite", async (t) => {
+    const os = t.objectStore("open");
+    const rs = t.objectStore("records");
+    for (const { base, next } of changes) {
+      const cur = await reqP(rs.get(next.id));
+      if (!cur || (cur.rev || 0) !== (base.rev || 0)) throw new Error("다른 화면에서 이 기록이 먼저 바뀌었습니다 — 화면을 다시 열어 확인해 주세요");
+      const o = await reqP(os.get(next.hak));
+      if (next.status === "open") {
+        if (o && o.id !== next.id) throw new Error("이 학생의 다른 자리 비움 기록이 이미 열려 있습니다");
+        os.put({ hak: next.hak, id: next.id });
+      } else if (o && o.id === next.id) {
+        os.delete(next.hak);
+      }
+      rs.put(next);
+    }
+    return changes.map((c) => c.next);
+  });
+}
+const recordsSig = (list) => list.map((r) => `${r.id}:${r.rev || 0}:${r.status}`).sort().join("|");
+// 복원 — 복원 전에 내려받은 상태(expectSig)와 DB가 같을 때만 한 트랜잭션에서 비우고 채운다
+// (그 사이 다른 화면이 기록했으면 지우지 않고 거부, 감사실장 P1)
+async function replaceAll(records, expectSig) {
+  return runTx(["records", "open"], "readwrite", async (t) => {
+    const cur = await reqP(t.objectStore("records").getAll());
+    if (expectSig != null && recordsSig(cur) !== expectSig) throw new Error("복원하는 사이 다른 화면에서 기록이 바뀌었습니다 — 다시 시도해 주세요");
+    await reqP(t.objectStore("records").clear());
+    await reqP(t.objectStore("open").clear());
+    for (const r of records) {
+      t.objectStore("records").add(r);
+      if (r.status === "open") t.objectStore("open").add({ hak: r.hak, id: r.id });
+    }
+  });
+}
+
+// 입력은 차례로 처리하고, 다른 탭의 변경은 다시 그린다(검토 16)
+let chain = Promise.resolve();
+const enqueue = (fn) => (chain = chain.catch(() => {}).then(fn));
+const channel = "BroadcastChannel" in window ? new BroadcastChannel("restroom-taeha") : null;
+if (channel) channel.onmessage = () => enqueue(async () => { await loadAll(); renderAll(); });
+function changed() { if (channel) channel.postMessage("changed"); }
+// 설정·명단·집계 제외가 다른 화면에서 바뀌면 다시 읽는다(감사실장 P2) — 같은 주소의 다른 탭에서만 storage 이벤트가 온다
+function reloadState() {
+  SETTINGS = Object.assign({ grade: null, periods: L.DEFAULT_PERIODS, limits: { ...L.DEFAULT_LIMITS }, voice: false }, lsGet(K.settings, {}));
+  if (L.validateLimits(SETTINGS.limits)) SETTINGS.limits = { ...L.DEFAULT_LIMITS };
+  ROSTER = lsGet(K.roster, null);
+  EXCLUDED = lsGet(K.excluded, []);
+}
+window.addEventListener("storage", (e) => {
+  if (e.key && e.key.startsWith("restroom_")) enqueue(async () => { reloadState(); await loadAll(); renderAll(); idleResult(); });
+});
+
+// ── 시각·교시 ──
+function periodState(now) {
+  const m = new Date(now).getHours() * 60 + new Date(now).getMinutes();
+  const ps = SETTINGS.periods;
+  for (const p of ps) {
+    const s = L.parseHHMM(p.start), e = L.parseHHMM(p.end);
+    if (m >= s && m < e) return { kind: "study", p, left: e - m };
+  }
+  const next = ps.find((p) => L.parseHHMM(p.start) > m);
+  if (next && m >= L.parseHHMM(ps[0].start)) return { kind: "break", next };
+  if (next) return { kind: "before", next };
+  return { kind: "after" };
+}
+const minutesSince = (ts, now) => Math.max(0, Math.floor((now - ts) / 60000));
+
+// ── 위 막대·현황판 그리기 ──
+function renderTop() {
+  const now = Date.now();
+  $("clock").innerHTML = `${L.hhmm(now)}`;
+  const g = $("gradeChip");
+  g.className = "chip" + (SETTINGS.grade ? "" : " is-warn");
+  g.lastElementChild.textContent = SETTINGS.grade ? `${gradeLabel()} 자습실` : "학년 미설정";
+  const st = periodState(now);
+  const pc = $("periodChip");
+  pc.className = "chip" + (st.kind === "study" ? " is-study" : "");
+  pc.lastElementChild.textContent =
+    st.kind === "study" ? `${st.p.no}교시 · ${st.p.end}까지 ${st.left}분` :
+    st.kind === "break" ? `쉬는 시간 · ${st.next.no}교시 ${st.next.start}` :
+    st.kind === "before" ? `자습 전 · 1교시 ${st.next.start}` : "자습 끝";
+  const cfg = driveCfg();
+  const bc = $("backupChip");
+  const age = cfg.lastOkAt ? now - cfg.lastOkAt : Infinity;
+  let text = "백업 없음";
+  if (cfg.lastOkAt) text = `백업 ${L.studyDay(cfg.lastOkAt) === L.studyDay(now) ? "" : (new Date(cfg.lastOkAt).getMonth() + 1) + "/" + new Date(cfg.lastOkAt).getDate() + " "}${L.hhmm(cfg.lastOkAt)}`;
+  const warn = age > 24 * 3600 * 1000 || (cfg.lastErr && (!cfg.lastOkAt || cfg.lastErrAt > cfg.lastOkAt));
+  bc.className = "chip" + (warn ? " is-warn" : " is-ok");
+  bc.lastElementChild.textContent = warn && cfg.lastErr && cfg.lastErrAt > (cfg.lastOkAt || 0) ? "백업 확인 필요" : text;
+}
+
+function renderBoard() {
+  const now = Date.now();
+  const today = L.studyDay(now);
+  const opens = L.openRecords(RECORDS);
+  const current = opens.filter((r) => r.day === today);
+  const older = opens.filter((r) => r.day !== today);
+  $("outCount").innerHTML = `${current.length}<span>명</span>`;
+  let html = "";
+  if (older.length) html += `<button class="old-open" data-act="today">이전 날짜 미복귀 ${older.length}건 — 오늘 기록에서 정리해 주세요</button>`;
+  if (!current.length) {
+    html += `<div class="board-empty"><div><svg style="color:var(--text-faint)"><use href="#i-calm"/></svg><b>지금 자리를 비운 학생이 없습니다</b>학번을 누르면 여기에 나타납니다</div></div>`;
+  } else {
+    html += current.map((r) => {
+      const m = minutesSince(r.outAt, now);
+      const safety = L.limitFor(r.reason, SETTINGS.limits);
+      const long = m >= safety;
+      const pct = Math.min(100, Math.round((m / safety) * 100));
+      return `<button class="out-row${long ? " is-long" : ""}" data-rec="${esc(r.id)}">
+        <div class="out-hak num">${esc(r.hak)}</div>
+        <div style="min-width:0"><div class="out-name">${esc(nameOf(r.hak, r.year))}<span class="tag tag-sky">${esc(L.reasonLabel(r.reason, true))}</span>${long ? '<span class="tag tag-coral">안전 확인</span>' : ""}</div>
+          <div class="out-meta num">${r.period}교시 · ${L.hhmm(r.outAt)} 나감 · 기준 ${safety}분</div></div>
+        <div class="out-time"><div class="out-min num">${m}<small>분</small></div><div class="bar"><i style="width:${pct}%"></i></div></div>
+      </button>`;
+    }).join("");
+  }
+  $("boardList").innerHTML = html;
+  const todays = L.dayRecords(RECORDS, today);
+  const per = SETTINGS.periods.map((p) => `<div class="stat"><div class="stat-label">${p.no}교시</div><div class="stat-value num">${todays.filter((r) => r.period === p.no).length}</div></div>`).join("");
+  $("boardFoot").innerHTML = `<div class="stat"><div class="stat-label">오늘 자리 비움</div><div class="stat-value num">${todays.length}</div></div>${per}`;
+}
+function renderAll() { renderTop(); renderBoard(); }
+
+// ── 입력 ──
+function renderSlots() {
+  const slots = $("slots").children;
+  for (let i = 0; i < 4; i++) {
+    slots[i].textContent = input[i] || "";
+    slots[i].classList.toggle("is-next", i === input.length);
+  }
+}
+let undoTimer = null;
+function idleResult() {
+  const r = $("result");
+  r.dataset.tone = "idle";
+  r.classList.remove("enter");
+  if (!SETTINGS.grade) r.innerHTML = `<div class="result-idle"><b>처음 설정이 필요합니다.</b><br>아래 <b>설정</b>에서 이 태블릿의 자습실 학년을 고르세요.</div>`;
+  else if (!ROSTER) r.innerHTML = `<div class="result-idle"><b>명단이 없습니다.</b><br>아래 <b>명단</b>에서 아침점호에 넣는 명렬표 엑셀을 불러오세요.</div>`;
+  else r.innerHTML = `<div class="result-idle"><b>학번 네 자리를 누르고 확인</b>을 누르세요.<br>나갈 때 한 번, 돌아와서 한 번.</div>`;
+}
+let resultTimer = null;
+function showResult({ tone, name, hak, badge, sub, undo }) {
+  clearTimeout(resultTimer);
+  clearInterval(undoTimer);
+  const r = $("result");
+  r.dataset.tone = tone;
+  r.classList.remove("enter");
+  void r.offsetWidth;
+  r.classList.add("enter");
+  const badgeCls = { out: "badge-out", return: "badge-return", info: "badge-info", error: "badge-error" }[tone];
+  r.innerHTML = `<div class="result-top"><span class="result-name">${esc(name)}</span>${hak ? `<span class="result-hak num">${esc(hak)}</span>` : ""}${badge ? `<span class="badge ${badgeCls}">${esc(badge)}</span>` : ""}</div>
+    <div class="result-sub">${esc(sub || "")}</div>${undo ? `<button class="undo" id="undoBtn"></button>` : ""}`;
+  if (undo) {
+    let left = 10;
+    const btn = $("undoBtn");
+    const draw = () => { btn.textContent = `${undo.label} (${left})`; };
+    draw();
+    btn.onclick = () => { clearInterval(undoTimer); btn.disabled = true; enqueue(undo.run); };
+    undoTimer = setInterval(() => { left--; if (left <= 0) { clearInterval(undoTimer); btn.remove(); } else draw(); }, 1000);
+  }
+  resultTimer = setTimeout(idleResult, undo ? 14000 : 6000);
+}
+function speak(text) {
+  if (!SETTINGS.voice || !("speechSynthesis" in window)) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = "ko-KR"; speechSynthesis.speak(u); } catch (e) {}
+}
+function saveFailed(e) {
+  const msg = e && e.message === "conflict" ? "다른 화면에서 방금 바뀌었습니다 — 다시 입력해 주세요" : "저장하지 못했습니다 — 다시 입력해 주세요";
+  showResult({ tone: "error", name: "저장 실패", sub: msg });
+}
+
+function press(k) {
+  if (k === "back") input = input.slice(0, -1);
+  else if (k === "enter") return submit();
+  else if (input.length < 4) input += k;
+  renderSlots();
+}
+function submit() {
+  const hak = input;
+  input = "";
+  renderSlots();
+  if (!hak) return;
+  enqueue(() => handleEntry(hak));
+}
+
+async function handleEntry(hak) {
+  if (!SETTINGS.grade) return showResult({ tone: "error", name: "학년 설정 필요", sub: "설정에서 이 태블릿의 자습실 학년을 먼저 고르세요" });
+  await loadAll();
+  const now = Date.now();
+  const open = OPEN[hak] || null;
+  const d = L.decideEntry({ hak, now, inRoster: !!students()[hak], open, last: L.latestLive(RECORDS, hak), periods: SETTINGS.periods });
+  const name = nameOf(hak, open ? open.year : undefined); // 지난 학년도 열린 기록에 올해 이름을 붙이지 않는다(감사실장 P2)
+  if (d.kind === "badFormat") return showResult({ tone: "error", name: "학번은 네 자리", sub: "학번 네 자리를 누른 뒤 확인을 눌러 주세요" });
+  if (d.kind === "unknown") return showResult({ tone: "error", name: hak, sub: ROSTER ? `${gradeLabel()} 명단에 없는 학번입니다` : "명단을 먼저 불러오세요" });
+  if (d.kind === "duplicate") return showResult({ tone: "info", name, hak, badge: "이미 기록됨", sub: "방금 기록됐습니다. 다시 누르지 않아도 됩니다." });
+  if (d.kind === "break") return showResult({ tone: "info", name, hak, badge: "쉬는 시간", sub: "나갈 때는 입력하지 않아도 됩니다" });
+  if (d.kind === "ask") return askStale(hak, d.rec);
+  try {
+    if (d.kind === "out") {
+      return pickReason(hak, name, (reason) => enqueue(() => recordOut(hak, name, reason)));
+    } else if (d.kind === "return") {
+      const rec = await writeReturn(hak, open.id, now);
+      changed();
+      await loadAll(); renderAll();
+      showResult({ tone: "return", name, hak, badge: "복귀", sub: `${L.durationMin(rec)}분 만에 돌아왔습니다`, undo: { label: `${name} 복귀 취소`, run: () => undoAction([change(rec, L.cancelReturn(rec, Date.now()))]) } });
+      speak(`${name} 복귀`);
+    }
+  } catch (e) {
+    await loadAll(); renderAll();
+    saveFailed(e);
+  }
+}
+// 사유를 고른 뒤 실제로 기록 — 고른 시각으로 교시를 다시 본다
+async function recordOut(hak, name, reason) {
+  const now = Date.now();
+  const p = L.periodAt(now, SETTINGS.periods);
+  if (!p) return showResult({ tone: "info", name, hak, badge: "쉬는 시간", sub: "나갈 때는 입력하지 않아도 됩니다" });
+  try {
+    const rec = await writeOut(hak, now, p, reason);
+    changed(); await loadAll(); renderAll();
+    showResult({ tone: "out", name, hak, badge: "자리 비움", sub: `${L.reasonLabel(reason)} · ${p}교시 · ${L.hhmm(now)} — 돌아와서 다시 입력하세요`, undo: { label: `${name} 자리 비움 취소`, run: () => undoAction([change(rec, L.cancelOut(rec, Date.now()))]) } });
+    speak(`${name} 자리 비움`);
+  } catch (e) { await loadAll(); renderAll(); saveFailed(e); }
+}
+
+// 자리 비움 사유 고르기(결정 17) — 기타는 감독 선생님 사전 승낙을 확인한 뒤에만
+const REASON_ICON = { urine: "i-drop", stool: "i-seat", water: "i-cup", other: "i-chat" };
+function pickReason(hak, name, onPick) {
+  const tiles = L.REASONS.map((r) => `<button class="reason" data-reason="${r.code}"><span class="reason-icon"><svg><use href="#${REASON_ICON[r.code]}"/></svg></span><span class="reason-label">${esc(r.label)}</span>${r.code === "other" ? '<span class="reason-hint">선생님 허락 필요</span>' : ""}</button>`).join("");
+  openSheet({ title: `${name} 학생`, sub: `${hak} · 무엇 때문에 자리를 비우나요?`, small: true, autoCloseMs: 25000,
+    body: `<div class="reasons" id="reasonGrid">${tiles}</div><button class="btn btn-wide" id="reasonCancel" style="margin-top:12px">취소</button>` });
+  $("reasonCancel").onclick = () => { closeSheet(); showResult({ tone: "info", name, hak, badge: "취소", sub: "기록하지 않았습니다" }); };
+  $("reasonGrid").onclick = (e) => {
+    const b = e.target.closest("[data-reason]");
+    if (!b) return;
+    if (b.dataset.reason !== "other") { closeSheet(); onPick(b.dataset.reason); return; }
+    $("sheetBody").innerHTML = `<div class="banner">기타 사유는 감독 선생님께 먼저 말씀드리고 허락을 받아야 합니다.</div>
+      <div style="font-size:21px;font-weight:800;margin:4px 0 16px">감독 선생님께 허락을 받았나요?</div>
+      <div style="display:grid;gap:12px"><button class="btn btn-amber btn-big" id="otherOk">허락받았어요</button><button class="btn" id="otherBack">돌아가기</button></div>`;
+    $("otherOk").onclick = () => { closeSheet(); onPick("other"); };
+    $("otherBack").onclick = () => pickReason(hak, name, onPick);
+  };
+}
+
+async function undoAction(list) {
+  try {
+    await saveRecords(list);
+    changed();
+    await loadAll(); renderAll();
+    showResult({ tone: "info", name: "취소했습니다", sub: "기록은 지우지 않고 '취소'로 남겼습니다" });
+  } catch (e) {
+    await loadAll(); renderAll();
+    showResult({ tone: "error", name: "취소하지 못했습니다", sub: e.message || "기록 고치기에서 확인해 주세요" });
+  }
+}
+
+// 놓친 복귀 — 학생이 고른다(결정 12)
+function askStale(hak, rec) {
+  const name = nameOf(hak, rec.year);
+  const now = Date.now();
+  const when = rec.day === L.studyDay(now) ? "오늘" : `${Number(rec.day.slice(5, 7))}/${Number(rec.day.slice(8))}`;
+  const pNow = L.periodAt(now, SETTINGS.periods);
+  openSheet({
+    title: `${name} 학생`, sub: `${hak} · 자리 비움 기록 확인`, small: true, autoCloseMs: 30000,
+    body: `<div class="banner">${esc(when)} ${L.hhmm(rec.outAt)} (${rec.period}교시)에 나간 기록이 아직 열려 있어요.</div>
+      <div style="display:grid;gap:12px">
+        <button class="btn btn-teal btn-big" id="askBack">지금 돌아왔어요</button>
+        <button class="btn btn-amber btn-big" id="askAgain">${pNow ? "그때 돌아왔고, 지금 다시 나가요" : "그때 돌아왔어요 (지금은 쉬는 시간)"}</button>
+        <button class="btn" id="askCancel">취소</button>
+      </div>`,
+  });
+  $("askCancel").onclick = closeSheet;
+  $("askBack").onclick = () => { closeSheet(); enqueue(async () => {
+    try {
+      const done = await writeReturn(hak, rec.id, Date.now());
+      changed(); await loadAll(); renderAll();
+      showResult({ tone: "return", name, hak, badge: "복귀", sub: `${L.durationMin(done)}분 만에 돌아왔습니다`, undo: { label: `${name} 복귀 취소`, run: () => undoAction([change(done, L.cancelReturn(done, Date.now()))]) } });
+    } catch (e) { await loadAll(); renderAll(); saveFailed(e); }
+  }); };
+  $("askAgain").onclick = () => {
+    closeSheet();
+    const go = (reason) => enqueue(async () => {
+      try {
+        const t = Date.now();
+        const p = reason ? L.periodAt(t, SETTINGS.periods) : 0;
+        const { old, fresh } = await writeResolveThenOut(hak, rec.id, t, p, reason);
+        changed(); await loadAll(); renderAll();
+        if (fresh) showResult({ tone: "out", name, hak, badge: "자리 비움", sub: `${L.reasonLabel(reason)} · ${p}교시 · ${L.hhmm(t)} (이전 기록은 '복귀 누락'으로 정리)`, undo: { label: `${name} 자리 비움 취소`, run: () => undoAction([change(fresh, L.cancelOut(fresh, Date.now())), change(old, L.reopenResolved(old, Date.now()))]) } });
+        else showResult({ tone: "info", name, hak, badge: "정리됨", sub: "이전 기록을 '복귀 누락'으로 정리했습니다", undo: { label: "정리 취소", run: () => undoAction([change(old, L.reopenResolved(old, Date.now()))]) } });
+      } catch (e) { await loadAll(); renderAll(); saveFailed(e); }
+    });
+    if (pNow) pickReason(hak, name, go); else go(null);
+  };
+}
+
+// ── 시트(교사용 화면) ──
+let sheetIdle = null;
+let sheetIdleMs = 0;
+function openSheet({ title, sub, body, small, autoCloseMs }) {
+  $("sheetTitle").textContent = title;
+  $("sheetSub").textContent = sub || "";
+  $("sheetBody").innerHTML = body;
+  $("sheetPanel").classList.toggle("is-small", !!small);
+  $("sheet").classList.add("is-open");
+  $("sheetBody").scrollTop = 0;
+  sheetIdleMs = autoCloseMs || 120000; // 손대지 않으면 키오스크 화면으로 돌아온다
+  bumpSheetIdle();
+}
+function bumpSheetIdle() { clearTimeout(sheetIdle); if ($("sheet").classList.contains("is-open")) sheetIdle = setTimeout(closeSheet, sheetIdleMs); }
+function closeSheet() { $("sheet").classList.remove("is-open"); clearTimeout(sheetIdle); }
+$("sheetClose").onclick = closeSheet;
+$("sheet").addEventListener("pointerdown", (e) => { bumpSheetIdle(); if (e.target === $("sheet")) closeSheet(); });
+$("sheet").addEventListener("input", bumpSheetIdle);
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("is-on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("is-on"), 2800); }
+
+const STATUS_LABEL = { open: "자리 비움 중", returned: "복귀", resolved: "복귀 누락", canceled: "취소", deleted: "삭제" };
+const STATUS_TAG = { open: "tag-amber", returned: "tag-teal", resolved: "tag-coral", canceled: "tag-mute", deleted: "tag-mute" };
+const reasonMix = (by) => L.REASONS.filter((r) => by && by[r.code]).map((r) => `${r.short} ${by[r.code]}`).join(" · ") || "—";
+function recRow(r, withDay) {
+  const m = L.durationMin(r);
+  return `<button class="row row-rec" data-edit="${esc(r.id)}">
+    <span class="num dim">${withDay ? esc(r.day.slice(5)) : r.period + "교시"}</span>
+    <span><span class="strong">${esc(nameOf(r.hak, r.year))}</span> <span class="dim num">${esc(r.hak)}</span> <span class="tag tag-sky">${esc(L.reasonLabel(r.reason, true))}</span></span>
+    <span class="num">${L.hhmm(r.outAt)}</span>
+    <span class="num dim">${r.inAt != null ? L.hhmm(r.inAt) : "—"}</span>
+    <span class="num">${m != null ? m + "분" : "—"}</span>
+    <span><span class="tag ${STATUS_TAG[r.status]}">${STATUS_LABEL[r.status]}</span>${r.trail && r.trail.length ? '<span class="tag tag-mute">고침</span>' : ""}</span>
+  </button>`;
+}
+const rowHead = (first) => `<div class="row row-rec row-head"><span>${first}</span><span>학생</span><span>나감</span><span>들어옴</span><span>분</span><span>상태</span></div>`;
+
+function dayView(day, title) {
+  const list = L.dayRecords(RECORDS, day);
+  const opensAll = L.openRecords(RECORDS);
+  let html = "";
+  if (day === L.studyDay(Date.now()) && opensAll.length) {
+    html += `<div class="section"><div class="section-title"><span>열린 기록 · 모든 날짜</span><span>${opensAll.length}건</span></div>
+      <div class="rows">${rowHead("교시")}${opensAll.map((r) => recRow(r, r.day !== day)).join("")}</div>
+      <div class="hint" style="margin-top:8px">눌러서 '지금 복귀로 기록' 또는 '복귀 누락으로 정리'를 고르세요. 자동으로 닫지 않습니다.</div></div>`;
+  }
+  if (!list.length) html += `<div class="card empty-note">이날 기록이 없습니다.</div>`;
+  for (const p of SETTINGS.periods) {
+    const g = list.filter((r) => r.period === p.no);
+    if (!g.length) continue;
+    html += `<div class="group-label">${p.no}교시 <span class="count num">${p.start}–${p.end} · ${g.length}건</span></div><div class="rows">${rowHead("교시")}${g.map((r) => recRow(r)).join("")}</div>`;
+  }
+  const extra = list.filter((r) => !SETTINGS.periods.some((p) => p.no === r.period));
+  if (extra.length) html += `<div class="group-label">기타 교시</div><div class="rows">${extra.map((r) => recRow(r)).join("")}</div>`;
+  openSheet({ title, sub: `${day} · 자리 비움 ${list.length}건`, body: html });
+}
+
+function openToday() { dayView(L.studyDay(Date.now()), "오늘 기록"); }
+
+function openStudent(prefill) {
+  openSheet({
+    title: "학생별", sub: "최근 자리 비움 횟수와 사유",
+    body: `<div class="field"><label for="stuQuery">학번 또는 이름</label><input class="input" id="stuQuery" placeholder="예: 학번 네 자리 또는 이름 일부" autocomplete="off"></div><div id="stuOut"></div>`,
+  });
+  const q = $("stuQuery");
+  const run = () => renderStudentSearch(q.value.trim());
+  q.oninput = run;
+  if (prefill) { q.value = prefill; run(); }
+}
+function renderStudentSearch(q) {
+  const out = $("stuOut");
+  if (!q) { out.innerHTML = `<div class="hint">학번이나 이름을 입력하세요.</div>`; return; }
+  const st = students();
+  const haks = new Set(Object.keys(st).filter((h) => h.startsWith(q) || st[h].name.includes(q)));
+  RECORDS.forEach((r) => { if (r.hak.startsWith(q)) haks.add(r.hak); });
+  const list = [...haks].sort();
+  if (list.length === 1 || st[q] || (q.length === 4 && list.includes(q))) return renderStudent(list.length === 1 ? list[0] : q);
+  if (!list.length) { out.innerHTML = `<div class="card empty-note">찾는 학생이 없습니다.</div>`; return; }
+  out.innerHTML = `<div class="rows">${list.slice(0, 40).map((h) => `<button class="row" data-stu="${esc(h)}" style="grid-template-columns:80px 1fr"><span class="num dim">${esc(h)}</span><span class="strong">${esc(nameOf(h))}</span></button>`).join("")}</div>`;
+}
+function renderStudent(hak) {
+  const s = L.studentSummary(RECORDS, hak, Date.now(), EXCLUDED);
+  const tile = (label, v) => `<div class="tile"><div class="tile-label">${label}</div><div class="tile-value num">${v.count}<small>회</small></div><div class="tile-foot num">평균 ${v.avg == null ? "—" : v.avg + "분"} · 최장 ${v.max == null ? "—" : v.max + "분"}</div><div class="tile-foot num">${esc(reasonMix(v.byReason))}</div></div>`;
+  let html = `<div class="card" style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+      <div style="flex:1"><div style="font-size:26px;font-weight:800">${esc(nameOf(hak))}</div><div class="dim num">${esc(hak)}${students()[hak] && students()[hak].room ? " · " + esc(students()[hak].room) + "호" : ""}</div></div>
+      <button class="btn" id="toggleEx">${s.excluded ? "집계 제외 해제" : "집계 제외"}</button></div>`;
+  if (s.excluded) html += `<div class="banner">집계 제외 학생입니다 — 횟수 표와 순위에 넣지 않습니다.</div>`;
+  html += `<div class="tiles" style="margin-bottom:18px">${tile("최근 7일", s.last7)}${tile("최근 30일", s.last30)}${tile("이번 학년도", s.year)}</div>`;
+  html += s.records.length ? `<div class="section-title"><span>내역</span><span>${s.records.length}건</span></div><div class="rows">${rowHead("날짜")}${s.records.map((r) => recRow(r, true)).join("")}</div>` : `<div class="card empty-note">이번 학년도 자리 비움 기록이 없습니다.</div>`;
+  $("stuOut").innerHTML = html;
+  $("toggleEx").onclick = () => {
+    const y = nowYear();
+    const next = L.isExcluded(EXCLUDED, hak, y) ? EXCLUDED.filter((e) => !(e.hak === hak && e.year === y)) : [...EXCLUDED, { hak, year: y }];
+    if (!lsSet(K.excluded, next)) return;
+    EXCLUDED = next;
+    renderStudent(hak);
+  };
+}
+
+function openTop() {
+  const top = L.topStudents(RECORDS, Date.now(), EXCLUDED, 7);
+  const body = top.length
+    ? `<div class="rows"><div class="row row-head" style="grid-template-columns:44px 62px minmax(0,1fr) 62px minmax(0,1.5fr) 64px 64px"><span>순위</span><span>학번</span><span>이름</span><span>횟수</span><span>사유</span><span>평균</span><span>최장</span></div>
+      ${top.map((t, i) => `<button class="row" data-stu-open="${esc(t.hak)}" style="grid-template-columns:44px 62px minmax(0,1fr) 62px minmax(0,1.5fr) 64px 64px"><span class="rank num">${i + 1}</span><span class="num dim">${esc(t.hak)}</span><span class="strong">${esc(nameOf(t.hak))}</span><span class="num strong">${t.count}회</span><span class="dim num">${esc(reasonMix(t.byReason))}</span><span class="num">${t.avg == null ? "—" : t.avg + "분"}</span><span class="num">${t.max == null ? "—" : t.max + "분"}</span></button>`).join("")}</div>`
+    : `<div class="card empty-note">최근 7일 자리 비움 기록이 없습니다.</div>`;
+  openSheet({ title: "최근 7일 자리 비움 많은 순", sub: "자습 중 자리 비움 횟수순 · 집계 제외 학생은 빠짐", body: body + `<div class="hint" style="margin-top:10px">복귀 누락으로 정리된 기록은 횟수에만 들어가고 평균·최장 분에는 들어가지 않습니다.</div>` });
+}
+
+let calCursor = null;
+function openCalendar() {
+  if (!calCursor) { const d = new Date(); calCursor = { y: d.getFullYear(), m: d.getMonth() }; }
+  const { y, m } = calCursor;
+  const counts = {};
+  for (const r of RECORDS) if (r.status === "open" || r.status === "returned" || r.status === "resolved") counts[r.day] = (counts[r.day] || 0) + 1;
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const today = L.studyDay(Date.now());
+  let cells = ["일", "월", "화", "수", "목", "금", "토"].map((d) => `<div class="cal-dow">${d}</div>`).join("");
+  for (let i = 0; i < first; i++) cells += "<div></div>";
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const n = counts[key];
+    cells += `<button class="cal-day${n ? " has" : ""}${key === today ? " is-today" : ""}" ${n ? `data-day="${key}"` : "disabled"}><span class="num">${d}</span>${n ? `<small class="num">${n}건</small>` : ""}</button>`;
+  }
+  openSheet({
+    title: "지난 날짜", sub: "날짜를 누르면 그날 기록을 봅니다",
+    body: `<div class="cal-nav"><button class="btn" id="calPrev">이전 달</button><span class="num">${y}년 ${m + 1}월</span><button class="btn" id="calNext">다음 달</button></div><div class="cal">${cells}</div>`,
+  });
+  $("calPrev").onclick = () => { calCursor = m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 }; openCalendar(); };
+  $("calNext").onclick = () => { calCursor = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }; openCalendar(); };
+}
+
+// 기록 고치기 — 사유를 남기고 원래 값은 흔적으로(규칙 f)
+function openEdit(id) {
+  const r = RECORDS.find((x) => x.id === id);
+  if (!r) return;
+  const trail = (r.trail || []).map((t) => `<div>${L.hhmm(t.at)} ${new Date(t.at).getMonth() + 1}/${new Date(t.at).getDate()} · ${esc({ edit: "시각 고침", resolve: "복귀 누락 정리", cancel: "자리 비움 취소", cancelReturn: "복귀 취소", reopen: "정리 취소", delete: "삭제", returnByTeacher: "사감 복귀 처리" }[t.action] || t.action)}${t.reason ? " — " + esc(t.reason) : ""} (이전 ${L.hhmm(t.prev.outAt)}${t.prev.inAt ? "→" + L.hhmm(t.prev.inAt) : ""}, ${esc(L.reasonLabel(t.prev.reason, true))}, ${esc(STATUS_LABEL[t.prev.status] || "")})</div>`).join("");
+  const isOpen = r.status === "open";
+  const live = r.status !== "canceled" && r.status !== "deleted";
+  openSheet({
+    title: `${nameOf(r.hak, r.year)} · ${r.hak}`, sub: `${r.day} · ${r.period}교시 · ${STATUS_LABEL[r.status]}`, small: true,
+    body: `${isOpen ? `<div class="btn-row" style="margin-bottom:16px"><button class="btn btn-teal" id="edReturn">지금 복귀로 기록</button><button class="btn btn-coral" id="edResolve">복귀 누락으로 정리</button></div>` : ""}
+      ${live ? `<div class="field"><label for="edOut">나간 시각</label><input class="input num" type="time" id="edOut" value="${L.hhmm(r.outAt)}"></div>
+      ${r.status === "returned" ? `<div class="field"><label for="edIn">들어온 시각</label><input class="input num" type="time" id="edIn" value="${L.hhmm(r.inAt)}"></div>` : ""}
+      <div class="field"><label for="edPeriod">교시</label><select class="input" id="edPeriod">${SETTINGS.periods.map((p) => `<option value="${p.no}"${p.no === r.period ? " selected" : ""}>${p.no}교시</option>`).join("")}${SETTINGS.periods.some((p) => p.no === r.period) ? "" : `<option value="${r.period}" selected>${r.period}교시</option>`}</select></div>
+      <div class="field"><label for="edWhy">자리 비움 사유</label><select class="input" id="edWhy">${L.REASONS.map((x) => `<option value="${x.code}"${x.code === r.reason ? " selected" : ""}>${esc(x.label)}</option>`).join("")}</select></div>` : ""}
+      <div class="field"><label for="edReason">고친 까닭 (반드시 적어 주세요)</label><input class="input" id="edReason" placeholder="예: 시각 착오 — 학생 이름은 쓰지 마세요" maxlength="60"></div>
+      ${live ? `<div class="btn-row"><button class="btn btn-amber" id="edSave">고친 내용 저장</button><button class="btn btn-coral" id="edDelete">기록 삭제</button></div>` : `<div class="hint">취소·삭제된 기록은 흔적으로만 남습니다.</div>`}
+      ${trail ? `<div class="section-title" style="margin-top:18px"><span>고친 흔적</span></div><div class="card trail num">${trail}</div>` : ""}`,
+  });
+  const reason = () => { const v = $("edReason").value.trim(); if (!v) { toast("고친 까닭을 적어 주세요"); $("edReason").focus(); } return v; };
+  const commit = (list, msg) => enqueue(async () => {
+    try { await saveRecords(list); changed(); await loadAll(); renderAll(); closeSheet(); toast(msg); }
+    catch (e) { await loadAll(); renderAll(); toast(e.message || "저장하지 못했습니다"); }
+  });
+  if (isOpen) {
+    $("edReturn").onclick = () => { const why = $("edReason").value.trim() || "사감 복귀 처리"; const now = Date.now(); commit([change(r, L.applyReturn(L.withTrail(r, "returnByTeacher", why, now), now))], "복귀로 기록했습니다"); };
+    $("edResolve").onclick = () => { const why = reason(); if (why) commit([change(r, L.resolveMissing(r, why, Date.now()))], "복귀 누락으로 정리했습니다"); };
+  }
+  if (live) {
+    $("edSave").onclick = () => {
+      const why = reason(); if (!why) return;
+      // 바꾼 칸만 다시 계산한다. 들어온 시각은 그 시각이 속한 자습일 기준 — 다음 날 복귀를 같은 날로 바꾸지 않게(감사실장 P2)
+      const outChanged = $("edOut").value !== L.hhmm(r.outAt);
+      const outAt = outChanged ? L.tsFromDayAndTime(r.day, $("edOut").value) : r.outAt;
+      const inEl = $("edIn");
+      const inChanged = !!inEl && inEl.value !== L.hhmm(r.inAt);
+      const inAt = inChanged ? L.tsFromDayAndTime(L.studyDay(r.inAt), inEl.value) : r.inAt;
+      if (outAt == null || inAt == null && inChanged) return toast("시각을 확인해 주세요");
+      const res = L.editRecord(r, { outAt: outChanged ? outAt : undefined, inAt: inChanged ? inAt : undefined, period: Number($("edPeriod").value), reasonCode: $("edWhy").value }, why, Date.now());
+      if (res.error) return toast(res.error);
+      commit([change(r, res.rec)], "고친 내용을 저장했습니다");
+    };
+    $("edDelete").onclick = () => { const why = reason(); if (why && confirm("이 기록을 삭제할까요? (흔적은 남습니다)")) commit([change(r, L.deleteRecord(r, why, Date.now()))], "삭제했습니다"); };
+  }
+}
+
+// ── 명단 ──
+function openRoster() {
+  const info = ROSTER
+    ? `<div class="tiles" style="grid-template-columns:repeat(2,1fr);margin-bottom:14px"><div class="tile"><div class="tile-label">${esc(gradeLabel())} 명단</div><div class="tile-value num">${ROSTER.count}<small>명</small></div></div>
+       <div class="tile"><div class="tile-label">불러온 때</div><div style="font-weight:800;margin-top:6px">${esc(ROSTER.loadedAt || "-")}</div><div class="tile-foot">${esc(ROSTER.fileName || "")} · ${esc(ROSTER.sheet || "")} 시트</div></div></div>`
+    : `<div class="banner is-warn">명단이 없습니다. 학번을 받으려면 명렬표 엑셀을 불러오세요.</div>`;
+  openSheet({
+    title: "명단", sub: "아침점호에 넣는 남학생 방배정 명렬표 엑셀",
+    body: `${info}<button class="btn btn-amber btn-wide" id="rosterPick">명렬표 엑셀 불러오기</button>
+      <p class="hint" style="margin-top:12px">'남학생방배정' 또는 '학번순방배정공지' 시트의 학번·이름·호실 칸만 읽고, ${esc(gradeLabel())} 학생만 받습니다. 명단은 이 태블릿에만 저장되고 백업에는 들어가지 않습니다.</p>`,
+  });
+  $("rosterPick").onclick = () => {
+    if (!SETTINGS.grade) return toast("설정에서 자습실 학년을 먼저 고르세요");
+    if (typeof XLSX === "undefined") return toast("엑셀 모듈을 불러오지 못했습니다 — 앱을 다시 열어 주세요");
+    $("rosterFile").click();
+  };
+}
+$("rosterFile").addEventListener("change", (ev) => {
+  const f = ev.target.files[0];
+  ev.target.value = "";
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = (e) => {
+    let parsed;
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+      parsed = L.parseRoster(wb.SheetNames.map((n) => ({ name: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "" }) })), SETTINGS.grade);
+    } catch (err) { parsed = { ok: false, error: "엑셀 파일을 읽지 못했습니다" }; }
+    if (!parsed.ok) return toast(parsed.error); // 기존 명단은 그대로(검토 18)
+    const diff = L.rosterDiff(students(), parsed.students, Object.keys(OPEN));
+    const msg = `명단을 바꿀까요?\n\n이전 ${diff.before}명 → 새 ${diff.after}명` + (diff.removed ? `\n빠지는 학생 ${diff.removed}명(그중 지금 자리 비움 중 ${diff.removedOpen}명 — 복귀는 계속 받습니다)` : "") + (parsed.dupes.length ? `\n중복 학번 ${parsed.dupes.length}개는 첫 칸만 썼습니다` : "");
+    if (ROSTER && !confirm(msg)) return;
+    const nextRoster = { students: parsed.students, count: parsed.count, sheet: parsed.sheet, fileName: f.name, loadedAt: new Date().toLocaleString("ko-KR"), grade: SETTINGS.grade };
+    if (!lsSet(K.roster, nextRoster)) return; // 저장하지 못하면 기존 명단 유지(감사실장 P2)
+    ROSTER = nextRoster;
+    closeSheet(); renderAll(); idleResult();
+    toast(`${gradeLabel()} ${parsed.count}명을 불러왔습니다`);
+  };
+  rd.readAsArrayBuffer(f);
+});
+
+// ── 설정 ──
+function openSettings() {
+  const y = nowYear();
+  const ex = EXCLUDED.filter((e) => e.year === y);
+  openSheet({
+    title: "설정", sub: "이 태블릿에만 적용",
+    body: `${SETTINGS.grade ? "" : `<div class="banner">처음 쓰는 태블릿입니다. 이 자습실의 학년을 고르세요.</div>`}
+      <div class="section"><div class="section-title"><span>자습실</span></div>
+        <div class="field"><label for="stGrade">자습실 학년</label><select class="input" id="stGrade">${["", "1", "2", "3", "all"].map((g) => `<option value="${g}"${(SETTINGS.grade || "") === g ? " selected" : ""}>${g === "" ? "고르세요" : g === "all" ? "전체 학년" : g + "학년"}</option>`).join("")}</select>
+        <div class="hint">학년을 바꾸면 명단을 다시 불러와야 합니다. 자리 비움 중인 학생의 복귀는 계속 받습니다.</div></div></div>
+      <div class="section"><div class="section-title"><span>교시 시각</span></div>
+        <div class="periods">${SETTINGS.periods.map((p) => `<span style="font-weight:800">${p.no}교시</span><input class="input num" type="time" id="ps${p.no}" value="${p.start}"><input class="input num" type="time" id="pe${p.no}" value="${p.end}">`).join("")}</div>
+        <div class="hint" style="margin-top:8px">자습 시간에만 새 자리 비움을 받습니다. 바꿔도 지난 기록의 교시는 그대로입니다.</div></div>
+      <div class="section"><div class="section-title"><span>화면</span></div>
+        <div class="field"><label>사유별 안전 확인 표시 (분)</label><div class="limits">${L.REASONS.map((x) => `<label class="limit" for="lim_${x.code}"><span>${esc(x.short)}</span><input class="input num" type="number" min="1" max="90" id="lim_${x.code}" value="${L.limitFor(x.code, SETTINGS.limits)}"></label>`).join("")}</div>
+          <div class="hint">이 시간이 지나면 현황판에 '안전 확인'이 뜹니다.</div></div>
+        <label class="toggle"><span><b>음성 안내</b><br><span class="hint">자리 비움·복귀를 소리로 알려 줍니다(조용한 자습실은 끔).</span></span><input type="checkbox" id="stVoice"${SETTINGS.voice ? " checked" : ""}></label></div>
+      <button class="btn btn-amber btn-wide" id="stSave">설정 저장</button>
+      <div class="section" style="margin-top:24px"><div class="section-title"><span>집계 제외 학생 · ${y}학년도</span><span>${ex.length}명</span></div>
+        ${ex.length ? `<div class="rows">${ex.map((e) => `<div class="row" style="grid-template-columns:80px 1fr auto"><span class="num dim">${esc(e.hak)}</span><span class="strong">${esc(nameOf(e.hak))}</span><button class="btn" data-unex="${esc(e.hak)}">해제</button></div>`).join("")}</div>` : `<div class="hint">없음 — 학생별 화면에서 정합니다(사유는 적지 않습니다).</div>`}</div>
+      <div class="section"><div class="section-title"><span>지난 학년도 기록</span></div>
+        <div class="hint">지난 학년도 기록은 지우지 않고 남겨 둡니다. 학번은 해마다 다른 학생에게 가므로 통계와 이름 표시에서는 자동으로 빠집니다.</div></div>`,
+  });
+  $("stSave").onclick = () => {
+    const periods = SETTINGS.periods.map((p) => ({ no: p.no, start: $("ps" + p.no).value, end: $("pe" + p.no).value }));
+    const err = L.validatePeriods(periods);
+    if (err) return toast(err);
+    const limits = {};
+    L.REASONS.forEach((x) => { limits[x.code] = Number($("lim_" + x.code).value); });
+    const limErr = L.validateLimits(limits);
+    if (limErr) return toast(limErr);
+    const grade = $("stGrade").value || null;
+    if (!grade) return toast("자습실 학년을 고르세요");
+    if (SETTINGS.grade && grade !== SETTINGS.grade && ROSTER && !confirm("학년을 바꾸면 지금 명단을 지웁니다. 계속할까요?")) return;
+    if (!saveSettings({ ...SETTINGS, grade, periods, limits, voice: $("stVoice").checked })) return;
+    if (ROSTER && grade !== ROSTER.grade) { ROSTER = null; try { localStorage.removeItem(K.roster); } catch (e) {} }
+    closeSheet(); renderAll(); idleResult();
+    toast("설정을 저장했습니다");
+  };
+  $("sheetBody").querySelectorAll("[data-unex]").forEach((b) => b.onclick = () => {
+    const next = EXCLUDED.filter((e) => !(e.hak === b.dataset.unex && e.year === y));
+    if (!lsSet(K.excluded, next)) return;
+    EXCLUDED = next;
+    openSettings();
+  });
+}
+
+// ── 백업 ──
+function currentBackup() {
+  return L.buildBackup({ records: RECORDS, settings: SETTINGS, excluded: EXCLUDED, drive: driveCfg(), device: DEVICE, now: Date.now() });
+}
+function downloadJson(obj, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], { type: "application/json" }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function openBackup() {
+  const cfg = driveCfg();
+  openSheet({
+    title: "백업", sub: `기록 ${RECORDS.length}건 · 마지막 날짜 ${L.lastDay(RECORDS)}`,
+    body: `<div class="section"><div class="section-title"><span>파일 백업</span></div>
+        <div class="btn-row"><button class="btn btn-amber" id="bkDown">전체 백업 내려받기 (.json)</button><button class="btn" id="bkRestore">백업 파일로 복원</button></div>
+        <div class="hint" style="margin-top:8px">기록·설정·집계 제외가 들어가고, 학생 명단(이름)은 들어가지 않습니다. 복원한 뒤에는 명렬표를 다시 불러오세요.</div></div>
+      <div class="section"><div class="section-title"><span>구글 드라이브 자동 백업</span></div>
+        <div class="card" style="margin-bottom:10px"><div id="gdStatus" class="hint" style="color:var(--text-dim)"></div></div>
+        <div class="btn-row" style="margin-bottom:12px"><button class="btn btn-amber" id="gdNow">지금 드라이브로 백업</button><button class="btn" id="gdConnect">구글 연결</button></div>
+        <div class="field"><label for="gdClient">OAuth 클라이언트 ID</label><input class="input" id="gdClient" placeholder="xxxxx.apps.googleusercontent.com" value="${esc(cfg.clientId || "")}"></div>
+        <div class="field"><label for="gdKeep">드라이브 보관 일수</label><select class="input" id="gdKeep">${[7, 14, 30, 60, 90].map((d) => `<option value="${d}"${(cfg.keepDays || 30) === d ? " selected" : ""}>${d}일</option>`).join("")}</select></div>
+        <label class="toggle"><span><b>자동 백업</b><br><span class="hint">앱을 켤 때, 3교시가 끝난 뒤, 화면을 다시 볼 때(6시간 지났으면) 올립니다.</span></span><input type="checkbox" id="gdAuto"${cfg.auto ? " checked" : ""}></label>
+        <div class="hint">폴더: ${esc(driveFolderName())} — 학년과 기기마다 따로 저장해 다른 태블릿과 겹치지 않습니다.</div></div>
+      <div class="section"><div class="section-title"><span>엑셀</span></div>
+        <button class="btn btn-wide" id="xlsxOut">엑셀로 내보내기 (전체 기록 · 학생별 요약)</button></div>`,
+  });
+  renderDriveStatus();
+  $("bkDown").onclick = () => { downloadJson(currentBackup(), `${TITLE}_백업_${gradeLabel()}_${L.stamp(Date.now())}.json`); toast(`백업 파일을 내려받았습니다 (기록 ${RECORDS.length}건)`); };
+  $("bkRestore").onclick = () => $("restoreFile").click();
+  $("gdClient").onchange = () => { const c = driveCfg(); c.clientId = $("gdClient").value.trim(); saveDrive(c); gTokenClient = null; renderDriveStatus(); };
+  $("gdKeep").onchange = () => { const c = driveCfg(); c.keepDays = Number($("gdKeep").value); saveDrive(c); };
+  $("gdAuto").onchange = () => { const c = driveCfg(); c.auto = $("gdAuto").checked; saveDrive(c); renderDriveStatus(); };
+  $("gdConnect").onclick = driveConnect;
+  $("gdNow").onclick = () => driveBackup(true);
+  $("xlsxOut").onclick = exportXlsx;
+}
+$("restoreFile").addEventListener("change", (ev) => {
+  const f = ev.target.files[0];
+  ev.target.value = "";
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = (e) => {
+    let obj;
+    try { obj = JSON.parse(e.target.result); } catch (err) { return toast("백업 파일을 읽지 못했습니다"); }
+    const v = L.validateBackup(obj); // 전체를 먼저 검증(검토 5)
+    if (!v.ok) return toast(v.error);
+    const notes = [];
+    if (obj.grade && obj.grade !== SETTINGS.grade) notes.push(`백업의 학년(${obj.grade === "all" ? "전체" : obj.grade + "학년"})이 지금 설정과 다릅니다`);
+    if (obj.device && obj.device !== DEVICE) notes.push("다른 태블릿에서 만든 백업입니다");
+    const msg = `이 백업으로 바꿀까요?\n\n지금: 기록 ${RECORDS.length}건 · 마지막 ${L.lastDay(RECORDS)}\n백업: 기록 ${obj.data.records.length}건 · 마지막 ${L.lastDay(obj.data.records)}` + (notes.length ? `\n\n주의: ${notes.join(" / ")}` : "") + `\n\n바꾸기 전에 지금 상태를 파일로 먼저 내려받습니다.`;
+    if (!confirm(msg)) return;
+    enqueue(async () => {
+      await loadAll();
+      const sig = recordsSig(RECORDS); // 이 상태를 내려받고, DB가 이 상태 그대로일 때만 바꾼다
+      downloadJson(currentBackup(), `${TITLE}_백업_${gradeLabel()}_복원전_${L.stamp(Date.now())}.json`);
+      const prevSettings = SETTINGS;
+      const prevExcluded = EXCLUDED;
+      const nextExcluded = obj.data.excluded || [];
+      // 설정·집계 제외를 먼저 저장 — 실패하면 기록은 건드리지 않고 되돌린다
+      if (!saveSettings(obj.data.settings ? { ...SETTINGS, ...obj.data.settings } : SETTINGS) || !lsSet(K.excluded, nextExcluded)) {
+        saveSettings(prevSettings); lsSet(K.excluded, prevExcluded);
+        return toast("기기 저장 공간에 쓰지 못해 복원을 멈췄습니다 — 기존 기록은 그대로입니다");
+      }
+      try {
+        await replaceAll(obj.data.records, sig); // 한 트랜잭션에서 비우고 채움
+      } catch (err) {
+        saveSettings(prevSettings); lsSet(K.excluded, prevExcluded);
+        await loadAll(); renderAll();
+        return toast(err && err.message ? err.message : "복원하지 못했습니다 — 기존 기록은 그대로입니다");
+      }
+      EXCLUDED = nextExcluded;
+      // 복원한 학년과 명단 학년이 다르면 명단을 지운다 — 다시 불러오기 전에는 새 자리 비움을 받지 않는다(감사실장 P2)
+      if (ROSTER && ROSTER.grade !== SETTINGS.grade) { ROSTER = null; try { localStorage.removeItem(K.roster); } catch (e) {} }
+      if (obj.data.drive) { const c = driveCfg(); Object.assign(c, obj.data.drive); delete c.folderId; delete c.folderName; saveDrive(c); }
+      changed(); await loadAll(); renderAll(); closeSheet(); idleResult();
+      toast(`복원했습니다 — 기록 ${RECORDS.length}건${ROSTER ? "" : " · 명렬표를 다시 불러오세요"}`);
+    });
+  };
+  rd.readAsText(f);
+});
+
+function exportXlsx() {
+  if (typeof XLSX === "undefined") return toast("엑셀 모듈을 불러오지 못했습니다");
+  if (!RECORDS.length) return toast("내보낼 기록이 없습니다");
+  const y = nowYear();
+  const trailText = (r) => (r.trail || []).map((t) => `${new Date(t.at).toLocaleString("ko-KR")} ${t.action}${t.reason ? "(" + t.reason + ")" : ""} 이전 ${L.hhmm(t.prev.outAt)}${t.prev.inAt ? "→" + L.hhmm(t.prev.inAt) : ""}`).join(" / ");
+  const rows = [["자습일", "교시", "학번", "이름", "사유", "나간 시각", "들어온 시각", "분", "상태", "고친 흔적"]];
+  [...RECORDS].sort((a, b) => a.outAt - b.outAt).forEach((r) => rows.push([r.day, r.period, r.hak, nameOf(r.hak, r.year), L.reasonLabel(r.reason), L.hhmm(r.outAt), r.inAt != null ? L.hhmm(r.inAt) : "", L.durationMin(r) ?? "", STATUS_LABEL[r.status], trailText(r)]));
+  const haks = [...new Set(RECORDS.filter((r) => r.year === y).map((r) => r.hak))].sort();
+  const sum = [["학번", "이름", "최근 7일", "최근 30일", "이번 학년도", ...L.REASONS.map((x) => x.short), "평균 분", "최장 분", "집계 제외"]];
+  haks.forEach((h) => { const s = L.studentSummary(RECORDS, h, Date.now(), EXCLUDED); sum.push([h, nameOf(h), s.last7.count, s.last30.count, s.year.count, ...L.REASONS.map((x) => s.year.byReason[x.code]), s.year.avg ?? "", s.year.max ?? "", s.excluded ? "예" : ""]); });
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(rows); ws1["!cols"] = [{ wch: 12 }, { wch: 6 }, { wch: 7 }, { wch: 10 }, { wch: 14 }, { wch: 9 }, { wch: 10 }, { wch: 6 }, { wch: 9 }, { wch: 60 }];
+  const ws2 = XLSX.utils.aoa_to_sheet(sum); ws2["!cols"] = [{ wch: 7 }, { wch: 10 }, { wch: 9 }, { wch: 10 }, { wch: 11 }, { wch: 6 }, { wch: 6 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 9 }];
+  XLSX.utils.book_append_sheet(wb, ws1, "자리비움기록");
+  XLSX.utils.book_append_sheet(wb, ws2, "학생별요약");
+  XLSX.writeFile(wb, `${TITLE}_기록_${gradeLabel()}_${L.stamp(Date.now())}.xlsx`);
+  toast("엑셀로 내보냈습니다");
+}
+
+// ── 구글 드라이브(학년·기기별 폴더, 최신 파일 직전본 보존, 빈 백업으로 덮지 않음 — 검토 3·6·7) ──
+const GDRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+let gTokenClient = null, gAccessToken = "", gTokenExp = 0, gTokenCb = null;
+function driveCfg() { return lsGet(K.drive, {}); }
+function saveDrive(c) { lsSet(K.drive, c); renderTop(); }
+function driveFolderName() { return `${TITLE}_백업_${gradeLabel()}_${DEVICE.slice(0, 6)}`; }
+function gisReady() { return typeof google !== "undefined" && google.accounts && google.accounts.oauth2; }
+function gInit() {
+  const cfg = driveCfg();
+  if (!cfg.clientId) return "클라이언트 ID가 없습니다";
+  if (!gisReady()) return "구글 모듈을 불러오지 못했습니다(인터넷 확인)";
+  if (!gTokenClient) {
+    gTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: cfg.clientId, scope: GDRIVE_SCOPE,
+      callback: (resp) => { const cb = gTokenCb; gTokenCb = null; if (resp && resp.access_token) { gAccessToken = resp.access_token; gTokenExp = Date.now() + (resp.expires_in ? resp.expires_in * 1000 : 3500000); if (cb) cb(true); } else if (cb) cb(false); },
+      error_callback: () => { const cb = gTokenCb; gTokenCb = null; if (cb) cb(false); },
+    });
+  }
+  return null;
+}
+function gToken(interactive) {
+  return new Promise((res) => {
+    if (gAccessToken && Date.now() < gTokenExp - 60000) return res(true);
+    if (gInit()) return res(false);
+    gTokenCb = res;
+    try { gTokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" }); } catch (e) { gTokenCb = null; res(false); }
+    setTimeout(() => { if (gTokenCb === res) { gTokenCb = null; res(false); } }, 45000);
+  });
+}
+async function gFetch(url, opts = {}) {
+  opts.headers = Object.assign({ Authorization: "Bearer " + gAccessToken }, opts.headers || {});
+  const r = await fetch(url, opts);
+  if (r.status === 401) { gAccessToken = ""; throw new Error("구글 인증이 만료됐습니다"); }
+  if (!r.ok) throw new Error(`드라이브 응답 ${r.status}`);
+  return r;
+}
+const qs = (s) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function gEnsureFolder() {
+  const cfg = driveCfg();
+  const name = driveFolderName();
+  if (cfg.folderId && cfg.folderName === name) {
+    try { const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files/${cfg.folderId}?fields=id,trashed`)).json(); if (j.id && !j.trashed) return cfg.folderId; } catch (e) {}
+  }
+  const q = encodeURIComponent(`name='${qs(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  let j = await (await gFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`)).json();
+  let id = j.files && j.files.length ? j.files[0].id : null;
+  if (!id) {
+    j = await (await gFetch("https://www.googleapis.com/drive/v3/files?fields=id", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" }) })).json();
+    id = j.id;
+  }
+  const c = driveCfg(); c.folderId = id; c.folderName = name; saveDrive(c);
+  return id;
+}
+async function gFind(name, folderId) {
+  const q = encodeURIComponent(`name='${qs(name)}' and '${folderId}' in parents and trashed=false`);
+  const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`)).json();
+  return j.files && j.files.length ? j.files[0] : null;
+}
+async function gPut(name, body, folderId, existingId) {
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(existingId ? { name } : { name, parents: [folderId] })], { type: "application/json" }));
+  form.append("file", new Blob([body], { type: "application/json" }));
+  const url = existingId ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id,name` : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name";
+  return (await gFetch(url, { method: existingId ? "PATCH" : "POST", body: form })).json();
+}
+async function gCleanOld(folderId, keepDays) {
+  try {
+    const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+    const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime)`)).json();
+    const cutoff = Date.now() - (keepDays || 30) * 86400000;
+    for (const f of j.files || []) {
+      if (f.name.startsWith("최신")) continue;
+      if (new Date(f.createdTime).getTime() < cutoff) { try { await gFetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: "DELETE" }); } catch (e) {} }
+    }
+  } catch (e) {}
+}
+async function gUpload() {
+  const folderId = await gEnsureFolder();
+  const body = JSON.stringify(currentBackup());
+  const latest = await gFind("최신.json", folderId);
+  if (latest) { // 덮기 전에 직전본을 '최신_이전.json'으로 보존
+    const prev = await gFind("최신_이전.json", folderId);
+    if (prev) await gFetch(`https://www.googleapis.com/drive/v3/files/${prev.id}`, { method: "DELETE" });
+    await gFetch(`https://www.googleapis.com/drive/v3/files/${latest.id}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "최신_이전.json" }) });
+  }
+  await gPut("최신.json", body, folderId, null);
+  const dayName = `${L.localDateStr(new Date())}.json`;
+  const dayFile = await gFind(dayName, folderId);
+  await gPut(dayName, body, folderId, dayFile ? dayFile.id : null);
+  gCleanOld(folderId, driveCfg().keepDays || 30);
+}
+let driveBusy = false;
+// 결과: true 성공 · "auth" 인증 필요 · false 그 밖의 실패(자동 백업이 성공했을 때만 끝난 것으로 치게, 감사실장 P2)
+async function driveBackup(interactive) {
+  if (driveBusy) return false;
+  const cfg = driveCfg();
+  const fail = (msg) => { const c = driveCfg(); c.lastErr = msg; c.lastErrAt = Date.now(); saveDrive(c); renderDriveStatus(); if (interactive) toast(msg); };
+  if (!cfg.clientId) { if (interactive) toast("클라이언트 ID를 먼저 넣어 주세요"); return false; }
+  await loadAll();
+  const count = RECORDS.length;
+  if (!interactive && !L.shouldAutoUpload(count, cfg.lastOkCount)) { fail(count ? "기록 수가 지난 백업보다 적어 자동 백업을 멈췄습니다 — 확인 후 [지금 드라이브로 백업]" : "기록이 없어 자동 백업을 건너뛰었습니다"); return false; }
+  if (interactive && cfg.lastOkCount && count < cfg.lastOkCount && !confirm(`지금 기록(${count}건)이 지난 백업(${cfg.lastOkCount}건)보다 적습니다. 그래도 올릴까요?`)) return false;
+  driveBusy = true;
+  try {
+    if (!(await gToken(interactive))) { fail("구글 인증이 필요합니다 — 백업 화면에서 [구글 연결]"); return "auth"; }
+    await gUpload();
+    const c = driveCfg(); c.lastOkAt = Date.now(); c.lastOkCount = count; c.lastErr = ""; saveDrive(c);
+    autoState.authBlocked = false;
+    renderDriveStatus();
+    if (interactive) toast("드라이브에 백업했습니다");
+    return true;
+  } catch (e) {
+    fail(`드라이브 백업 실패 — ${e.message || "연결 확인"}`);
+    return false;
+  } finally { driveBusy = false; }
+}
+async function driveConnect() {
+  const err = gInit();
+  if (err) return toast(err);
+  if (!(await gToken(true))) return toast("구글 연결을 마치지 못했습니다");
+  try { await gEnsureFolder(); autoState.authBlocked = false; renderDriveStatus(); toast("구글 드라이브에 연결했습니다"); } catch (e) { toast("폴더를 준비하지 못했습니다 — 권한 확인"); }
+}
+function renderDriveStatus() {
+  const el = $("gdStatus");
+  if (!el) return;
+  const c = driveCfg();
+  const when = (t) => (t ? new Date(t).toLocaleString("ko-KR") : "없음");
+  el.innerHTML = `${c.clientId ? "클라이언트 ID 있음" : "클라이언트 ID 없음"} · ${c.auto ? "자동 켬" : "자동 끔"}<br>마지막 성공: <b>${esc(when(c.lastOkAt))}</b>${c.lastOkCount ? ` (기록 ${c.lastOkCount}건)` : ""}${c.lastErr ? `<br><span style="color:var(--coral)">${esc(c.lastErr)} · ${esc(when(c.lastErrAt))}</span>` : ""}`;
+}
+// 자동 백업 시점 — 켤 때, 3교시 끝 뒤 하루 한 번, 화면이 다시 보일 때(6시간 지났으면).
+// 성공했을 때만 끝난 것으로 치고 실패하면 10분 뒤 다시 — 인증이 필요하면 사감이 연결할 때까지 멈춘다(감사실장 P2)
+let autoState = { startDone: false, nightDay: null, lastTry: 0, authBlocked: false };
+async function autoBackupTick(reason) {
+  const c = driveCfg();
+  if (!c.auto || !c.clientId || !gisReady() || autoState.authBlocked || driveBusy) return;
+  const now = Date.now();
+  const ps = SETTINGS.periods;
+  const m = new Date(now).getHours() * 60 + new Date(now).getMinutes();
+  const day = L.studyDay(now);
+  const afterNight = m >= L.parseHHMM(ps[ps.length - 1].end);
+  const due = !autoState.startDone || (afterNight && autoState.nightDay !== day) || (reason === "visible" && (!c.lastOkAt || now - c.lastOkAt > 6 * 3600 * 1000));
+  if (!due || now - autoState.lastTry < 10 * 60 * 1000) return;
+  autoState.lastTry = now;
+  const res = await driveBackup(false);
+  if (res === "auth") autoState.authBlocked = true;
+  if (res !== true) return;
+  autoState.startDone = true;
+  if (afterNight) autoState.nightDay = day;
+}
+
+// ── 연결 ──
+document.querySelectorAll(".key").forEach((b) => {
+  b.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    b.classList.add("is-down");
+    setTimeout(() => b.classList.remove("is-down"), 110);
+    press(b.dataset.k);
+  });
+});
+document.addEventListener("keydown", (e) => {
+  if ($("sheet").classList.contains("is-open")) { if (e.key === "Escape") closeSheet(); return; }
+  if (/^\d$/.test(e.key)) press(e.key);
+  else if (e.key === "Backspace") press("back");
+  else if (e.key === "Enter") press("enter");
+});
+const OPENERS = { today: openToday, student: () => openStudent(), top: openTop, calendar: () => { calCursor = null; openCalendar(); }, roster: openRoster, backup: openBackup, settings: openSettings };
+document.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => OPENERS[b.dataset.open]()));
+$("backupChip").addEventListener("click", openBackup);
+$("boardList").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-rec]");
+  if (row) return openEdit(row.dataset.rec);
+  if (e.target.closest("[data-act='today']")) openToday();
+});
+$("sheetBody").addEventListener("click", (e) => {
+  const ed = e.target.closest("[data-edit]");
+  if (ed) return openEdit(ed.dataset.edit);
+  const day = e.target.closest("[data-day]");
+  if (day) return dayView(day.dataset.day, `${day.dataset.day} 기록`);
+  const stu = e.target.closest("[data-stu]");
+  if (stu) return renderStudent(stu.dataset.stu);
+  const so = e.target.closest("[data-stu-open]");
+  if (so) return openStudent(so.dataset.stuOpen);
+});
+$("fsTab").addEventListener("click", () => {
+  const d = document;
+  try { if (!d.fullscreenElement) d.documentElement.requestFullscreen(); else d.exitFullscreen(); } catch (e) {}
+});
+// 뒤로 가기로 실수로 나가지 않게
+try {
+  history.pushState({ rt: 1 }, "");
+  window.addEventListener("popstate", () => {
+    if ($("sheet").classList.contains("is-open")) { closeSheet(); history.pushState({ rt: 1 }, ""); return; }
+    if (confirm("자리 비움 기록 화면을 나갈까요?\n기록은 저장되어 있습니다.")) history.back();
+    else history.pushState({ rt: 1 }, "");
+  });
+} catch (e) {}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { enqueue(async () => { await loadAll(); renderAll(); }); autoBackupTick("visible"); }
+});
+
+(async function start() {
+  renderSlots();
+  idleResult();
+  renderTop();
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  try { await loadAll(); } catch (e) { showResult({ tone: "error", name: "저장소를 열지 못했습니다", sub: "앱을 다시 열어 주세요. 계속되면 백업 파일로 복원하세요." }); }
+  renderAll();
+  if (!SETTINGS.grade) openSettings();
+  setInterval(() => { renderAll(); autoBackupTick("tick"); }, 15000);
+  let tries = 0;
+  const wait = setInterval(() => { tries++; if (gisReady()) { clearInterval(wait); autoBackupTick("start"); } else if (tries > 40) clearInterval(wait); }, 500);
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>

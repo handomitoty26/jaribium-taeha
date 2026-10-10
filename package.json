@@ -1,0 +1,8 @@
+{
+  "name": "restroom-taeha",
+  "private": true,
+  "description": "태하관 야간 자습 화장실 외출 기록 PWA",
+  "scripts": {
+    "test": "node --test tests/logic.test.js tests/assets.test.js"
+  }
+}
