@@ -1,0 +1,10 @@
+# 학생 개인정보가 든 파일은 절대 커밋하지 않는다(명렬표 엑셀·백업·내보내기 결과)
+*.xlsx
+*.xls
+*.csv
+*.json
+!manifest.json
+!package.json
+*백업*
+*기록_*
+node_modules/
