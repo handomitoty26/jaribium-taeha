@@ -49,6 +49,7 @@ html, body {
   user-select: none; -webkit-user-select: none; touch-action: manipulation;
 }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+[hidden] { display: none !important; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
 input, select { font: inherit; color: var(--text); user-select: text; -webkit-user-select: text; }
 .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
@@ -65,6 +66,7 @@ input, select { font: inherit; color: var(--text); user-select: text; -webkit-us
 .brand-sub { font-size: 12.5px; color: var(--text-faint); letter-spacing: 0.2px; white-space: nowrap; }
 .chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--ink-800); font-size: 13.5px; font-weight: 700; color: var(--text-dim); white-space: nowrap; }
 .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
+.chip-install { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); font-weight: 800; }
 .chip.is-study { color: var(--text); }
 .chip.is-study .dot { background: var(--amber); box-shadow: 0 0 0 4px var(--amber-soft); }
 .chip.is-ok .dot { background: var(--teal); }
@@ -290,6 +292,7 @@ input, select { font: inherit; color: var(--text); user-select: text; -webkit-us
     <span class="chip" id="gradeChip"><span class="dot"></span><span>학년 미설정</span></span>
     <span class="chip" id="periodChip"><span class="dot"></span><span>—</span></span>
     <div class="spacer"></div>
+    <button class="chip chip-install" id="installBtn" hidden>앱 설치</button>
     <span class="chip" id="backupChip" role="button" tabindex="0"><span class="dot"></span><span>백업</span></span>
     <div class="clock num" id="clock">--:--</div>
   </header>
@@ -1325,6 +1328,34 @@ try {
 } catch (e) {}
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") { enqueue(async () => { await loadAll(); renderAll(); }); autoBackupTick("visible"); }
+});
+
+// 앱 설치 버튼 — 안드로이드 크롬 메뉴의 "앱 설치"는 같은 주소(도메인)에 설치된 앱이 하나라도 있으면 "이미 설치됨"으로 보고 열지 못한다
+// (크롬 소스 AppInstallMenuHandler → WebappRegistry.isAppInstalledForUrl = 도메인 단위, 10-12 확인). 기숙사 앱 13개가 같은 도메인이라 메뉴로는 설치가 안 된다.
+// 페이지가 직접 요청하는 설치(beforeinstallprompt)는 이 앱의 시작 주소 범위로만 충돌을 확인하므로 이 길로 설치한다.
+let installEvent = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installEvent = e;
+  $("installBtn").hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  installEvent = null;
+  $("installBtn").hidden = true;
+  toast("설치했습니다 — 홈 화면의 아이콘으로 여세요");
+});
+$("installBtn").addEventListener("click", async () => {
+  const ev = installEvent;
+  if (!ev) return toast("지금은 설치할 수 없습니다 — 크롬으로 주소를 다시 열어 주세요");
+  installEvent = null; // 설치 창은 한 번만 띄울 수 있다
+  $("installBtn").hidden = true;
+  try {
+    await ev.prompt();
+    const choice = await ev.userChoice;
+    if (choice.outcome !== "accepted") toast("설치를 취소했습니다 — 주소를 다시 열면 버튼이 다시 나옵니다");
+  } catch (err) {
+    toast("설치 창을 열지 못했습니다 — 주소를 다시 열어 주세요");
+  }
 });
 
 (async function start() {

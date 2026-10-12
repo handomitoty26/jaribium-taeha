@@ -37,3 +37,11 @@ it("캐시 저장을 기다린 뒤 응답하고, 이 앱 캐시에서만 찾는�
   assert.match(sw, /await cache\.put\(req, copy\);\s*\}\s*return res;/);
   assert.doesNotMatch(sw, /caches\.match\(/);
 });
+
+it("앱 설치 버튼 — 처음엔 숨김, 크롬의 설치 요청을 받아 보이고, 설치되면 숨김(메뉴 설치가 도메인 단위로 막혀 페이지 설치를 쓴다)", () => {
+  assert.match(html, /\[hidden\] \{ display: none !important; \}/);
+  assert.match(html, /<button class="chip chip-install" id="installBtn" hidden>앱 설치<\/button>/);
+  assert.match(html, /addEventListener\("beforeinstallprompt", \(e\) => \{\s*e\.preventDefault\(\);\s*installEvent = e;\s*\$\("installBtn"\)\.hidden = false;/);
+  assert.match(html, /addEventListener\("appinstalled", \(\) => \{\s*installEvent = null;\s*\$\("installBtn"\)\.hidden = true;/);
+  assert.match(html, /await ev\.prompt\(\);/);
+});
