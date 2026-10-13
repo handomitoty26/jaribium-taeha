@@ -377,3 +377,35 @@ for (const tz of ["UTC", "Asia/Seoul"]) {
     });
   });
 }
+
+// 팝업 문구(사용자 결정 10-13) — 조건마다 다른 줄, 자제 문장은 한 번
+describe("나갈 때 팝업 문구", () => {
+  const OUT = "돌아와서 다시 학번 입력하세요";
+  const WARN = "면학 분위기 조성을 위해 이동을 자제하세요";
+  const WEEK = "주 5회 이상 자리를 비우고 있습니다";
+  const w = (o) => ({ early: false, daily: false, weekly: false, today: 1, week: 1, ...o, warn: !!(o.early || o.daily || o.weekly) });
+  it("조건이 없으면 첫 줄만", () => {
+    assert.deepEqual(L.outAlertLines(w({})), [OUT]);
+    assert.deepEqual(L.outAlertLines(null), [OUT]);
+  });
+  it("교시 시작 1시간 안만이면 두 줄", () => {
+    assert.deepEqual(L.outAlertLines(w({ early: true })), [OUT, WARN]);
+  });
+  it("오늘 2번째 이상이면 실제 횟수 — 두·세·네 번째, 열 번째 뒤는 숫자", () => {
+    assert.deepEqual(L.outAlertLines(w({ daily: true, today: 2 })), [OUT, "오늘 두 번째 자리 비움입니다", WARN]);
+    assert.deepEqual(L.outAlertLines(w({ daily: true, today: 3, early: true })), [OUT, "오늘 세 번째 자리 비움입니다", WARN]);
+    assert.equal(L.outAlertLines(w({ daily: true, today: 4 }))[1], "오늘 네 번째 자리 비움입니다");
+    assert.equal(L.outAlertLines(w({ daily: true, today: 10 }))[1], "오늘 열 번째 자리 비움입니다");
+    assert.equal(L.outAlertLines(w({ daily: true, today: 11 }))[1], "오늘 11번째 자리 비움입니다");
+  });
+  it("주 5회 이상이면 주 문장, 하루와 함께면 두 문장 모두·자제 문장은 한 번", () => {
+    assert.deepEqual(L.outAlertLines(w({ weekly: true, week: 5 })), [OUT, WEEK, WARN]);
+    assert.deepEqual(L.outAlertLines(w({ daily: true, today: 2, weekly: true, week: 6, early: true })), [OUT, "오늘 두 번째 자리 비움입니다", WEEK, WARN]);
+  });
+  it("실제 계산과 이어서 — 같은 날 두 번째면 '두 번째'", () => {
+    const P = L.DEFAULT_PERIODS;
+    const first = { ...L.makeOutRecord({ hak: "1101", now: new Date(2026, 9, 13, 19, 35).getTime(), period: 1, reason: "urine" }), status: "returned", inAt: new Date(2026, 9, 13, 19, 40).getTime() };
+    const now = L.makeOutRecord({ hak: "1101", now: new Date(2026, 9, 13, 19, 45).getTime(), period: 1, reason: "water" });
+    assert.deepEqual(L.outAlertLines(L.moveWarning([first], now, P)), [OUT, "오늘 두 번째 자리 비움입니다", WARN]);
+  });
+});

@@ -254,6 +254,21 @@
     const weekly = week >= WARN_WEEK_COUNT;
     return { early, daily, weekly, today, week, warn: early || daily || weekly };
   }
+  // 팝업 문구(사용자 결정 10-13) — 늘 첫 줄, 경고면 하루·주 횟수 줄(해당하는 것 모두)과 자제 문장 한 번
+  const OUT_LINE = "돌아와서 다시 학번 입력하세요";
+  const WARN_LINE = "면학 분위기 조성을 위해 이동을 자제하세요";
+  const ORDINAL_KO = ["", "첫", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열"];
+  function ordinalKo(n) {
+    return ORDINAL_KO[n] ? `${ORDINAL_KO[n]} 번째` : `${n}번째`;
+  }
+  function outAlertLines(w) {
+    const lines = [OUT_LINE];
+    if (!w || !w.warn) return lines;
+    if (w.daily) lines.push(`오늘 ${ordinalKo(w.today)} 자리 비움입니다`);
+    if (w.weekly) lines.push(`주 ${WARN_WEEK_COUNT}회 이상 자리를 비우고 있습니다`);
+    lines.push(WARN_LINE);
+    return lines;
+  }
 
   function dayRecords(records, day) {
     return records.filter((r) => r.day === day && LIVE.has(r.status)).sort((a, b) => a.outAt - b.outAt);
@@ -434,7 +449,7 @@
     localDateStr, studyDay, addDays, schoolYear, schoolYearOfDay, hhmm, stamp, parseHHMM, tsFromDayAndTime,
     validatePeriods, periodAt, decideEntry,
     makeOutRecord, withTrail, applyReturn, resolveMissing, cancelOut, cancelReturn, reopenResolved, deleteRecord, editRecord, durationMin,
-    isExcluded, studentSummary, topStudents, weekStart, moveWarning, dayRecords, openRecords, latestLive, recordDays, nameFor,
+    isExcluded, studentSummary, topStudents, weekStart, moveWarning, ordinalKo, outAlertLines, dayRecords, openRecords, latestLive, recordDays, nameFor,
     parseRoster, rosterDiff, lastDay, buildBackup, validRecord, validSettings, validateBackup, shouldAutoUpload, escapeHtml,
   };
 });
