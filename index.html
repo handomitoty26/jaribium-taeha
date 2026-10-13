@@ -36,6 +36,7 @@
   --coral-soft: rgba(255, 123, 108, 0.15);
   --sky: #93b4ff;
   --sky-soft: rgba(147, 180, 255, 0.13);
+  --alert-red: #ff4040;
   --radius-l: 20px;
   --radius-m: 14px;
   --radius-s: 10px;
@@ -156,6 +157,12 @@ input, select { font: inherit; color: var(--text); user-select: text; -webkit-us
 .tab { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border-radius: var(--radius-s); color: var(--text-dim); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .tab svg { width: 22px; height: 22px; }
 .tab:active { background: var(--ink-700); color: var(--text); }
+
+/* 나갈 때 안내·이동 자제 경고 팝업(사용자 결정 10-13) — 빨간 큰 글씨, 누르면 닫힘 */
+.alert { position: fixed; inset: 0; z-index: 80; display: none; place-items: center; padding: 5vh 5vw; background: rgba(4, 7, 16, 0.8); backdrop-filter: blur(3px); }
+.alert.is-open { display: grid; }
+.alert-card { width: min(980px, 100%); display: grid; gap: 4vh; padding: 7vh 5vw; text-align: center; background: var(--ink-850); border: 3px solid var(--alert-red); border-radius: 26px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); animation: rise 0.18s ease-out; }
+.alert-line { color: var(--alert-red); font-size: clamp(30px, 6.2vw, 68px); font-weight: 900; line-height: 1.3; word-break: keep-all; }
 
 /* 시트(교사용 화면) */
 .sheet { position: fixed; inset: 0; z-index: 50; display: none; background: rgba(4, 7, 16, 0.62); backdrop-filter: blur(4px); padding: 4vh 3vw; }
@@ -351,6 +358,8 @@ input, select { font: inherit; color: var(--text); user-select: text; -webkit-us
   </div>
 </div>
 
+<div class="alert" id="alert" role="alertdialog" aria-live="assertive"><div class="alert-card" id="alertCard"></div></div>
+
 <div class="toast" id="toast" role="status"></div>
 <input type="file" id="rosterFile" accept=".xlsx,.xls" hidden>
 <input type="file" id="restoreFile" accept=".json,application/json" hidden>
@@ -359,7 +368,7 @@ input, select { font: inherit; color: var(--text); user-select: text; -webkit-us
 "use strict";
 const L = window.RestroomLogic;
 // 화면과 계산 파일의 판이 다르면(업데이트 중 섞임) 멈춘 화면 대신 안내를 띄운다
-if (!L || L.LOGIC_VERSION !== 2) {
+if (!L || L.LOGIC_VERSION !== 3) {
   document.body.innerHTML = '<div style="position:fixed;inset:0;display:grid;place-items:center;background:#0b1020;color:#e9edf7;font:700 20px/1.6 sans-serif;text-align:center;padding:24px"><div>프로그램 파일을 다시 받아야 합니다.<br><span style="font-weight:500;font-size:16px;color:#a3aecb">인터넷에 연결한 뒤 앱을 닫았다가 다시 열어 주세요. 기록은 그대로 있습니다.</span></div></div>';
   throw new Error("logic.js 판이 맞지 않습니다");
 }
@@ -630,6 +639,22 @@ function showResult({ tone, name, hak, badge, sub, undo }) {
   }
   resultTimer = setTimeout(idleResult, undo ? 14000 : 6000);
 }
+// 나갈 때 안내·이동 자제 경고(사용자 결정 10-13) — 3초 뒤 저절로, 누르면 바로 닫힌다. 기록에는 손대지 않는다.
+let alertTimer = null;
+function showOutAlert(rec) {
+  let w = null;
+  try { w = L.moveWarning(RECORDS, rec, SETTINGS.periods); } catch (e) {}
+  const lines = ["돌아와서 다시 학번 입력하세요"];
+  if (w && w.warn) lines.push("면학 분위기 조성을 위해 이동을 자제하세요");
+  $("alertCard").innerHTML = lines.map((t) => `<div class="alert-line">${esc(t)}</div>`).join("");
+  $("alert").classList.add("is-open");
+  clearTimeout(alertTimer);
+  alertTimer = setTimeout(closeAlert, 3000);
+}
+function closeAlert() {
+  clearTimeout(alertTimer);
+  $("alert").classList.remove("is-open");
+}
 function speak(text) {
   if (!SETTINGS.voice || !("speechSynthesis" in window)) return;
   try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = "ko-KR"; speechSynthesis.speak(u); } catch (e) {}
@@ -689,6 +714,7 @@ async function recordOut(hak, name, reason) {
     const rec = await writeOut(hak, now, p, reason);
     changed(); await loadAll(); renderAll();
     showResult({ tone: "out", name, hak, badge: "자리 비움", sub: `${L.reasonLabel(reason)} · ${p}교시 · ${L.hhmm(now)} — 돌아와서 다시 입력하세요`, undo: { label: `${name} 자리 비움 취소`, run: () => undoAction([change(rec, L.cancelOut(rec, Date.now()))]) } });
+    showOutAlert(rec);
     speak(`${name} 자리 비움`);
   } catch (e) { await loadAll(); renderAll(); saveFailed(e); }
 }
@@ -755,8 +781,10 @@ function askStale(hak, rec) {
         const p = reason ? L.periodAt(t, SETTINGS.periods) : 0;
         const { old, fresh } = await writeResolveThenOut(hak, rec.id, t, p, reason);
         changed(); await loadAll(); renderAll();
-        if (fresh) showResult({ tone: "out", name, hak, badge: "자리 비움", sub: `${L.reasonLabel(reason)} · ${p}교시 · ${L.hhmm(t)} (이전 기록은 '복귀 누락'으로 정리)`, undo: { label: `${name} 자리 비움 취소`, run: () => undoAction([change(fresh, L.cancelOut(fresh, Date.now())), change(old, L.reopenResolved(old, Date.now()))]) } });
-        else showResult({ tone: "info", name, hak, badge: "정리됨", sub: "이전 기록을 '복귀 누락'으로 정리했습니다", undo: { label: "정리 취소", run: () => undoAction([change(old, L.reopenResolved(old, Date.now()))]) } });
+        if (fresh) {
+          showResult({ tone: "out", name, hak, badge: "자리 비움", sub: `${L.reasonLabel(reason)} · ${p}교시 · ${L.hhmm(t)} (이전 기록은 '복귀 누락'으로 정리)`, undo: { label: `${name} 자리 비움 취소`, run: () => undoAction([change(fresh, L.cancelOut(fresh, Date.now())), change(old, L.reopenResolved(old, Date.now()))]) } });
+          showOutAlert(fresh);
+        } else showResult({ tone: "info", name, hak, badge: "정리됨", sub: "이전 기록을 '복귀 누락'으로 정리했습니다", undo: { label: "정리 취소", run: () => undoAction([change(old, L.reopenResolved(old, Date.now()))]) } });
       } catch (e) { await loadAll(); renderAll(); saveFailed(e); }
     });
     if (pNow) pickReason(hak, name, go); else go(null);
@@ -1289,7 +1317,9 @@ document.querySelectorAll(".key").forEach((b) => {
     press(b.dataset.k);
   });
 });
+$("alert").addEventListener("click", closeAlert);
 document.addEventListener("keydown", (e) => {
+  if ($("alert").classList.contains("is-open")) closeAlert(); // 팝업은 닫고 그 키는 평소처럼 처리(다음 학생 입력을 막지 않음)
   if ($("sheet").classList.contains("is-open")) { if (e.key === "Escape") closeSheet(); return; }
   if (/^\d$/.test(e.key)) press(e.key);
   else if (e.key === "Backspace") press("back");

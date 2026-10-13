@@ -231,6 +231,30 @@
       .map(([hak, list]) => ({ hak, ...summarize(list) }))
       .sort((a, b) => b.count - a.count || (b.max || 0) - (a.max || 0) || a.hak.localeCompare(b.hak));
   }
+  // ── 이동 자제 경고(사용자 결정 10-13) — 방금 저장한 자리 비움 기록을 넣어 센다 ──
+  // 교시 시작부터 60분 안에 나갔거나, 오늘(자습일) 2번째 이상, 이번 주(자습일 기준 월~일) 5번째 이상이면 경고. 집계 제외 학생도 똑같이.
+  const WARN_EARLY_MINUTES = 60;
+  const WARN_DAY_COUNT = 2;
+  const WARN_WEEK_COUNT = 5;
+  function weekStart(dayStr) {
+    const [y, m, d] = dayStr.split("-").map(Number);
+    return addDays(dayStr, -((new Date(y, m - 1, d).getDay() + 6) % 7)); // 월요일
+  }
+  function moveWarning(records, rec, periods) {
+    // 같은 학번·같은 학년도(학번이 해마다 바뀜)·살아 있는 기록만, 이번 기록은 꼭 한 번
+    const mine = records.filter((r) => r.hak === rec.hak && r.year === rec.year && LIVE.has(r.status) && r.id !== rec.id).concat([rec]);
+    const mon = weekStart(rec.day);
+    const sun = addDays(mon, 6);
+    const today = mine.filter((r) => r.day === rec.day).length;
+    const week = mine.filter((r) => r.day >= mon && r.day <= sun).length;
+    const p = (periods || []).find((x) => x.no === rec.period);
+    const sinceStart = p ? new Date(rec.outAt).getHours() * 60 + new Date(rec.outAt).getMinutes() - parseHHMM(p.start) : null;
+    const early = sinceStart != null && sinceStart >= 0 && sinceStart < WARN_EARLY_MINUTES;
+    const daily = today >= WARN_DAY_COUNT;
+    const weekly = week >= WARN_WEEK_COUNT;
+    return { early, daily, weekly, today, week, warn: early || daily || weekly };
+  }
+
   function dayRecords(records, day) {
     return records.filter((r) => r.day === day && LIVE.has(r.status)).sort((a, b) => a.outAt - b.outAt);
   }
@@ -404,13 +428,13 @@
   }
 
   return {
-    LOGIC_VERSION: 2, // index.html이 기대하는 판 — 다르면 화면이 멈추지 않고 다시 열라고 안내한다
+    LOGIC_VERSION: 3, // index.html이 기대하는 판 — 다르면 화면이 멈추지 않고 다시 열라고 안내한다
     DEFAULT_PERIODS, ROSTER_SHEETS, APP_ID, BACKUP_VERSION, STATUSES, DUPLICATE_MS, STALE_MINUTES,
     REASONS, REASON_CODES, DEFAULT_LIMITS, reasonLabel, limitFor, validateLimits,
     localDateStr, studyDay, addDays, schoolYear, schoolYearOfDay, hhmm, stamp, parseHHMM, tsFromDayAndTime,
     validatePeriods, periodAt, decideEntry,
     makeOutRecord, withTrail, applyReturn, resolveMissing, cancelOut, cancelReturn, reopenResolved, deleteRecord, editRecord, durationMin,
-    isExcluded, studentSummary, topStudents, dayRecords, openRecords, latestLive, recordDays, nameFor,
+    isExcluded, studentSummary, topStudents, weekStart, moveWarning, dayRecords, openRecords, latestLive, recordDays, nameFor,
     parseRoster, rosterDiff, lastDay, buildBackup, validRecord, validSettings, validateBackup, shouldAutoUpload, escapeHtml,
   };
 });

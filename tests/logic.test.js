@@ -317,3 +317,63 @@ describe("자리 비움 사유", () => {
     assert.match(L.validateBackup(b2).error, /설정/);
   });
 });
+
+// 이동 자제 경고(사용자 결정 10-13) — 교시 시작 60분 안·오늘 2번째·이번 주(월~일) 5번째, 두 시간대에서
+for (const tz of ["UTC", "Asia/Seoul"]) {
+  describe(`이동 자제 경고 · 시간대 ${tz}`, () => {
+    before(() => {
+      process.env.TZ = tz;
+    });
+    // 2026-10-12는 월요일
+    const out = (hak, d, h, m, period, extra = {}) => ({ ...L.makeOutRecord({ hak, now: at(2026, 10, d, h, m), period, reason: "urine" }), ...extra });
+    const warn = (records, rec) => L.moveWarning(records, rec, P);
+
+    it("이번 주 시작은 월요일", () => {
+      assert.equal(L.weekStart("2026-10-12"), "2026-10-12");
+      assert.equal(L.weekStart("2026-10-18"), "2026-10-12");
+      assert.equal(L.weekStart("2026-10-11"), "2026-10-05");
+    });
+
+    it("교시 시작부터 60분 안이면 경고 — 1교시 19:29까지, 2교시 내내, 3교시 22:19까지", () => {
+      for (const [h, m, p, early] of [[18, 30, 1, true], [19, 29, 1, true], [19, 30, 1, false], [20, 10, 2, true], [20, 59, 2, true], [21, 20, 3, true], [22, 19, 3, true], [22, 20, 3, false]]) {
+        const r = out("1101", 13, h, m, p);
+        const w = warn([], r);
+        assert.equal(w.early, early, `${h}:${m}`);
+        assert.equal(w.warn, early, `${h}:${m} — 첫 자리 비움은 시작 60분만 본다`);
+        assert.equal(w.today, 1);
+      }
+      assert.equal(warn([], out("1101", 13, 19, 40, 9)).early, false, "설정에 없는 교시는 시작 경고 없음");
+    });
+
+    it("오늘(자습일) 2번째부터 경고 — 취소·삭제는 빼고, 복귀 누락 정리는 넣는다", () => {
+      const first = out("1101", 13, 19, 35, 1, { status: "returned", inAt: at(2026, 10, 13, 19, 40) });
+      const now = out("1101", 13, 19, 45, 1);
+      assert.deepEqual([warn([first], now).today, warn([first], now).daily, warn([first], now).warn], [2, true, true]);
+      for (const status of ["canceled", "deleted"]) assert.equal(warn([{ ...first, status }], now).daily, false, status);
+      assert.equal(warn([{ ...first, status: "resolved", inAt: null }], now).daily, true);
+      assert.equal(warn([{ ...first, hak: "1102" }], now).daily, false, "다른 학번");
+      assert.equal(warn([{ ...first, year: 2025 }], now).daily, false, "다른 학년도(같은 학번이 다른 학생)");
+      const night = out("1101", 12, 22, 30, 3);
+      const late = { ...out("1101", 12, 22, 45, 3) };
+      assert.equal(warn([night], late).today, 2, "같은 자습일 3교시");
+    });
+
+    it("이번 기록은 꼭 한 번 — 목록에 이미 있어도 두 번 세지 않는다", () => {
+      const r = out("1101", 13, 19, 40, 1);
+      assert.equal(warn([r], r).today, 1);
+      assert.equal(warn([r], r).warn, false);
+    });
+
+    it("이번 주(월~일) 5번째부터 경고 — 지난 주 일요일·다음 주 월요일은 세지 않는다", () => {
+      const days = [12, 13, 14, 15].map((d) => out("1101", d, 19, 40, 1, { status: "returned", inAt: at(2026, 10, d, 19, 45) }));
+      const fri = out("1101", 16, 19, 40, 1);
+      const w = warn(days, fri);
+      assert.deepEqual([w.week, w.weekly, w.daily, w.early, w.warn], [5, true, false, false, true]);
+      assert.equal(warn(days.slice(1), fri).weekly, false, "4번째는 아직");
+      const lastSun = out("1101", 11, 19, 40, 1, { status: "returned", inAt: at(2026, 10, 11, 19, 45) });
+      const nextMon = out("1101", 19, 19, 40, 1, { status: "returned", inAt: at(2026, 10, 19, 19, 45) });
+      assert.equal(warn([lastSun, nextMon, ...days.slice(1)], fri).week, 4);
+      assert.equal(warn(days, out("1101", 18, 19, 40, 1)).weekly, true, "일요일도 같은 주");
+    });
+  });
+}
